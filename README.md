@@ -2,6 +2,15 @@
 
 A powerful Chrome extension that allows you to pick and toggle the visibility of webpage elements with precision. Features visual element picking, DevTools integration, smart selector matching, keyboard shortcuts, and persistent storage across sessions.
 
+## Table of Contents
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage-guide)
+- [Configuration Options](#configuration-options)
+- [Troubleshooting](#troubleshooting)
+- [Version History](#version-history)
+- [License](#license)
+
 ## Features
 
 ### **Element Selection**
