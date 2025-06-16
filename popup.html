@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      padding: 16px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+    }
+    
+    .page {
+      display: none;
+    }
+    
+    .page.active {
+      display: block;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    
+    .settings-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    
+    .back-btn {
+      background: none;
+      border: 1px solid #dadce0;
+      color: #666;
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 12px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .back-btn:hover {
+      background: #f8f9fa;
+      border-color: #4285f4;
+      color: #4285f4;
+    }
+    
+    .title {
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .picker-btn {
+      background: #4285f4;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    .picker-btn:hover {
+      background: #3367d6;
+    }
+    
+    .picker-btn.active {
+      background: #ea4335;
+    }
+    
+    .manual-selector-section {
+      background: #f8f9fa;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .manual-selector-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .manual-selector-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+    }
+    
+    .add-selector-btn {
+      background: #4285f4;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .add-selector-btn:hover {
+      background: #3367d6;
+    }
+    
+    .add-selector-btn:disabled {
+      background: #9aa0a6;
+      cursor: not-allowed;
+    }
+    
+    .manual-selector-input-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .manual-selector-input {
+      flex: 1;
+      background: white;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 8px 32px 8px 12px;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      color: #333;
+      transition: all 0.2s;
+    }
+    
+    .manual-selector-input:focus {
+      outline: none;
+      border-color: #4285f4;
+      box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+    }
+    
+    .manual-selector-input::placeholder {
+      color: #9aa0a6;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    .clear-selector-btn {
+      position: absolute;
+      right: 8px;
+      background: none;
+      border: none;
+      color: #666;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 3px;
+      font-size: 14px;
+      line-height: 1;
+      display: none;
+    }
+    
+    .clear-selector-btn:hover {
+      background: #f1f3f4;
+      color: #333;
+    }
+    
+    .manual-selector-input:not(:placeholder-shown) + .clear-selector-btn {
+      display: block;
+    }
+    
+    .manual-selector-tip {
+      font-size: 10px;
+      color: #666;
+      font-style: italic;
+      line-height: 1.3;
+    }
+    
+    .hotkey-info {
+      font-size: 12px;
+    }
+    
+    .hotkey-setup {
+      background: white;
+      border: 1px solid #e5e5e5;
+      border-radius: 4px;
+      padding: 12px;
+    }
+    
+    .hotkey-description-text {
+      color: #333;
+      margin-bottom: 12px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    
+    .hotkey-available {
+      margin-bottom: 12px;
+    }
+    
+    .hotkey-available strong {
+      color: #333;
+      font-size: 11px;
+    }
+    
+    .hotkey-commands-list {
+      margin: 6px 0 0 16px;
+      padding: 0;
+      font-size: 11px;
+      color: #666;
+    }
+    
+    .hotkey-commands-list li {
+      margin-bottom: 4px;
+    }
+    
+    .hotkey-instructions {
+      margin-bottom: 12px;
+    }
+    
+    .hotkey-instructions strong {
+      color: #333;
+      font-size: 11px;
+    }
+    
+    .hotkey-steps {
+      margin: 6px 0 0 16px;
+      padding: 0;
+      font-size: 11px;
+      color: #666;
+      line-height: 1.4;
+    }
+    
+    .hotkey-steps li {
+      margin-bottom: 4px;
+    }
+    
+    .hotkey-steps strong {
+      color: #333;
+      font-weight: 500;
+    }
+    
+    .shortcuts-btn {
+      background: #4285f4;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      transition: all 0.2s;
+      width: 100%;
+    }
+    
+    .shortcuts-btn:hover {
+      background: #3367d6;
+    }
+    
+    .hotkey-note {
+      font-size: 10px;
+      color: #666;
+      font-style: italic;
+      margin-top: 8px;
+      text-align: center;
+    }
+    
+    .bulk-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .bulk-btn {
+      flex: 1;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    
+    .bulk-btn.show-all {
+      background: #34a853;
+      color: white;
+    }
+    
+    .bulk-btn.show-all:hover {
+      background: #2d9945;
+    }
+    
+    .bulk-btn.hide-all {
+      background: #ea4335;
+      color: white;
+    }
+    
+    .bulk-btn.hide-all:hover {
+      background: #d33b2c;
+    }
+    
+    .bulk-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    .controls-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    
+    .import-export {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+    }
+    
+    .import-export-btn {
+      flex: 1;
+      background: #f8f9fa;
+      color: #333;
+      border: 1px solid #dadce0;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .import-export-btn:hover {
+      background: #e8f0fe;
+      border-color: #4285f4;
+    }
+    
+    .import-export-btn:disabled {
+      background: #f1f3f4;
+      color: #9aa0a6;
+      cursor: not-allowed;
+    }
+    
+    .import-container {
+      flex: 1;
+      position: relative;
+    }
+    
+    .import-container:hover .import-export-btn {
+      background: #e8f0fe;
+      border-color: #4285f4;
+    }
+    
+    .import-input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    
+    .settings-btn {
+      background: none;
+      border: 1px solid #dadce0;
+      color: #666;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 12px;
+      white-space: nowrap;
+    }
+    
+    .settings-btn:hover {
+      background: #f8f9fa;
+      border-color: #4285f4;
+      color: #4285f4;
+    }
+    
+    .settings-content {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .setting-group {
+      background: #f8f9fa;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .setting-group-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .setting-label {
+      font-size: 13px;
+      color: #333;
+      flex: 1;
+      line-height: 1.4;
+    }
+    
+    .setting-description {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+      line-height: 1.3;
+    }
+    
+    .setting-warning {
+      font-size: 11px;
+      color: #ea4335;
+      margin-top: 4px;
+      font-style: italic;
+    }
+    
+    .setting-toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      margin-left: 12px;
+      flex-shrink: 0;
+    }
+    
+    .setting-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .setting-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 20px;
+    }
+    
+    .setting-slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .setting-slider {
+      background-color: #4285f4;
+    }
+    
+    input:checked + .setting-slider:before {
+      transform: translateX(16px);
+    }
+    
+    .setting-select {
+      background: white;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #333;
+      margin-left: 12px;
+      min-width: 120px;
+      cursor: pointer;
+    }
+    
+    .setting-select:focus {
+      outline: none;
+      border-color: #4285f4;
+      box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+    }
+    
+    .elements-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .element-item {
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: #f8f9fa;
+    }
+    
+    .element-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .element-name {
+      font-weight: 500;
+      color: #333;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    
+    .element-name.editable {
+      background: white;
+      border: 1px solid #dadce0;
+      border-radius: 3px;
+      padding: 4px 6px;
+      font-size: 12px;
+      min-width: 150px;
+    }
+    
+    .element-info {
+      flex: 1;
+      margin-right: 12px;
+    }
+    
+    .element-selector {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 2px;
+      word-break: break-all;
+    }
+    
+    .element-text {
+      font-size: 10px;
+      color: #888;
+      max-height: 20px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .element-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+      background-color: #4285f4;
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    
+    .action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 3px;
+      font-size: 14px;
+    }
+    
+    .edit-btn {
+      color: #4285f4;
+    }
+    
+    .edit-btn:hover {
+      background: #e8f0fe;
+    }
+    
+    .delete-btn {
+      color: #ea4335;
+    }
+    
+    .delete-btn:hover {
+      background: #fee;
+    }
+    
+    .empty-state {
+      text-align: center;
+      color: #666;
+      padding: 32px 16px;
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    
+    .notification {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #4285f4;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 1000;
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    .notification.success {
+      background: #34a853;
+    }
+    
+    .notification.error {
+      background: #ea4335;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Main Page -->
+  <div id="mainPage" class="page active">
+    <div class="header">
+      <div class="title">Element Toggle</div>
+      <button id="pickerBtn" class="picker-btn">Pick Element</button>
+    </div>
+    
+    <div class="manual-selector-section">
+      <div class="manual-selector-header">
+        <span class="manual-selector-label">Or paste selector from DevTools:</span>
+        <button id="addSelectorBtn" class="add-selector-btn">Add Element</button>
+      </div>
+      <div class="manual-selector-input-container">
+        <input type="text" id="manualSelectorInput" class="manual-selector-input" placeholder="e.g., .header nav ul li:nth-child(2)" />
+        <button id="clearSelectorBtn" class="clear-selector-btn" title="Clear input">×</button>
+      </div>
+      <div class="manual-selector-tip">
+        💡 Right-click element in DevTools → Copy → Copy selector, then paste here
+      </div>
+    </div>
+    
+    <div id="bulkActions" class="bulk-actions" style="display: none;">
+      <button id="showAllBtn" class="bulk-btn show-all">Show All</button>
+      <button id="hideAllBtn" class="bulk-btn hide-all">Hide All</button>
+    </div>
+    
+    <div class="controls-section">
+      <div class="import-export">
+        <button id="exportBtn" class="import-export-btn">Export Settings</button>
+        <div class="import-container">
+          <button class="import-export-btn">Import Settings</button>
+          <input type="file" id="importInput" class="import-input" accept=".json">
+        </div>
+      </div>
+      <button id="settingsBtn" class="settings-btn">⚙️ Settings</button>
+    </div>
+    
+    <div id="elementsList" class="elements-list">
+      <div id="emptyState" class="empty-state">
+        <div class="empty-state-icon">🎯</div>
+        <div>Click "Pick Element" to start selecting elements to toggle</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Page -->
+  <div id="settingsPage" class="page">
+    <div class="settings-header">
+      <button id="backBtn" class="back-btn">← Back</button>
+      <div class="title">Settings</div>
+    </div>
+    
+    <div class="settings-content">
+      <div class="setting-group">
+        <div class="setting-group-title">Element Restoration</div>
+        <div class="setting-item">
+          <div class="setting-label">
+            Auto-restore element states on page load
+            <div class="setting-description">Automatically restore hidden elements when you visit a page</div>
+            <div class="setting-warning">⚠️ This might not work consistently across all websites</div>
+          </div>
+          <label class="setting-toggle">
+            <input type="checkbox" id="autoRestoreToggle">
+            <span class="setting-slider"></span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="setting-group">
+        <div class="setting-group-title">Selector Matching</div>
+        <div class="setting-item">
+          <div class="setting-label">
+            Selector matching method
+            <div class="setting-description">How the extension finds elements on the page</div>
+            <div class="setting-warning">Smart pattern works better across different environments</div>
+          </div>
+          <select id="selectorMethodSelect" class="setting-select">
+            <option value="exact">Exact Match</option>
+            <option value="smart">Smart Pattern</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="setting-group">
+        <div class="setting-group-title">Keyboard Shortcuts</div>
+        <div class="hotkey-info">
+          <div class="hotkey-setup">
+            <div class="hotkey-description-text">
+              Set up custom keyboard shortcuts to quickly hide/show all tracked elements.
+            </div>
+            <div class="hotkey-available">
+              <strong>Available commands:</strong>
+              <ul class="hotkey-commands-list">
+                <li>Hide all tracked elements</li>
+                <li>Show all tracked elements</li>
+              </ul>
+            </div>
+            <div class="hotkey-instructions">
+              <strong>How to set up hotkeys:</strong>
+              <ol class="hotkey-steps">
+                <li>Go to <strong>chrome://extensions/shortcuts</strong></li>
+                <li>Find "Element Toggle" in the list</li>
+                <li>Click the pencil icon next to each command</li>
+                <li>Assign your preferred key combinations</li>
+              </ol>
+            </div>
+            <button id="openShortcutsBtn" class="shortcuts-btn">Open Shortcuts Settings</button>
+          </div>
+          <div class="hotkey-note">
+            💡 Choose combinations that don't conflict with your other applications
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html> 

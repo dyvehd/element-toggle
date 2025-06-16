@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Element Toggle",
+  "version": "1.0",
+  "description": "Toggle visibility of webpage elements with an easy-to-use picker",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Element Toggle"
+  },
+  "commands": {
+    "hide-all": {
+      "description": "Hide all tracked elements"
+    },
+    "show-all": {
+      "description": "Show all tracked elements"
+    }
+  }
+} 
