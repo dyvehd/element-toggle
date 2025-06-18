@@ -3,13 +3,17 @@ class ElementPicker {
     this.isActive = false;
     this.hoveredElement = null;
     this.overlay = null;
+    this.clickHotkeys = []; // Store hotkeys for this page
+    this.lastEscapeTime = 0; // Track timing for double-Esc detection
+    this.escapeTimeout = 500; // Maximum time between Esc presses (ms)
     
     this.handleMouseMove = this.handleMouseMove.bind(this);
     this.handleClick = this.handleClick.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleGlobalHotkey = this.handleGlobalHotkey.bind(this);
     
     this.setupMessageListener();
-    this.restoreElementStates();
+    this.loadHotkeysAndRestoreState();
   }
   
   setupMessageListener() {
@@ -34,7 +38,221 @@ class ElementPicker {
       } else if (request.action === 'showNotification') {
         this.showHotkeyNotification(request.message, request.type || 'info');
         sendResponse({ success: true });
+      } else if (request.action === 'hotkeysUpdated') {
+        // Reload hotkeys and state from storage
+        this.loadHotkeysAndRestoreState();
+        sendResponse({ success: true });
       }
+    });
+  }
+  
+  async loadHotkeysAndRestoreState() {
+    await this.restoreElementStates(); // Restore visibility first
+    
+    const result = await chrome.storage.local.get([window.location.hostname]);
+    const elements = result[window.location.hostname] || [];
+    
+    this.clickHotkeys = elements
+      .filter(el => el.action === 'click' && el.hotkey)
+      .map(el => ({
+        hotkey: el.hotkey,
+        selector: el.selector,
+        smartSelector: el.smartSelector,
+        name: el.name // Add name for debugging
+      }));
+
+    console.log('Loaded hotkeys for', window.location.hostname, ':', this.clickHotkeys);
+
+    // Remove any existing listener before adding a new one
+    document.removeEventListener('keydown', this.handleGlobalHotkey, true);
+    
+    // Only add listener if we have hotkeys
+    if (this.clickHotkeys.length > 0) {
+      document.addEventListener('keydown', this.handleGlobalHotkey, true);
+      console.log('Global hotkey listener attached with', this.clickHotkeys.length, 'hotkeys');
+    } else {
+      console.log('No hotkeys to register for this page');
+    }
+  }
+
+  handleGlobalHotkey(e) {
+    console.log('Key pressed:', e.key, 'Modifiers:', { ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey });
+    
+    // Double-Esc mechanism - works even inside input fields
+    if (e.key === 'Escape') {
+      const currentTime = Date.now();
+      const timeSinceLastEscape = currentTime - this.lastEscapeTime;
+      
+      console.log('Escape pressed, time since last:', timeSinceLastEscape + 'ms');
+      
+      if (timeSinceLastEscape < this.escapeTimeout) {
+        // Double Esc detected!
+        console.log('Double-Escape detected - unfocusing any active element');
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Find the currently focused element and blur it
+        const activeElement = document.activeElement;
+        if (activeElement && (
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName) || 
+          activeElement.isContentEditable
+        )) {
+          activeElement.blur();
+          this.showHotkeyNotification('Input unfocused - hotkeys ready', 'success');
+        } else {
+          this.showHotkeyNotification('Double-Esc detected', 'info');
+        }
+        
+        // Reset the timer to prevent triple-Esc from triggering again
+        this.lastEscapeTime = 0;
+        return;
+      } else {
+        // First Esc or too much time has passed
+        this.lastEscapeTime = currentTime;
+        
+        // If we're in an input field, don't process other hotkeys
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) {
+          console.log('Single Esc in input field - ignoring (press Esc again quickly to unfocus)');
+          return;
+        }
+      }
+    }
+    
+    // Standard check: Don't trigger other hotkeys if user is typing in an input field
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) {
+      console.log('Ignoring hotkey - user is typing in an input field (double-tap Esc to unfocus)');
+      return;
+    }
+
+    let hotkeyString = '';
+    if (e.ctrlKey) hotkeyString += 'Ctrl+';
+    if (e.altKey) hotkeyString += 'Alt+';
+    if (e.shiftKey) hotkeyString += 'Shift+';
+
+    if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+      hotkeyString += e.key.toUpperCase();
+    } else {
+      console.log('Only modifier was pressed, ignoring');
+      return; // Only modifier was pressed
+    }
+
+    console.log('Hotkey string formed:', hotkeyString);
+    console.log('Available hotkeys:', this.clickHotkeys.map(h => h.hotkey));
+
+    const matchedHotkey = this.clickHotkeys.find(h => h.hotkey === hotkeyString);
+
+    if (matchedHotkey) {
+      console.log('Hotkey matched!', matchedHotkey);
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const element = this.findElementWithFallback(
+        matchedHotkey.selector,
+        matchedHotkey.smartSelector,
+        'smart' // Always use smart find for hotkeys
+      );
+
+      if (element) {
+        console.log('Element found, processing click:', element);
+        this.performElementAction(element);
+        this.showClickFeedback(element);
+        this.showHotkeyNotification(`Activated: ${matchedHotkey.name}`, 'success');
+      } else {
+        console.warn(`Hotkey triggered, but element not found for selector: ${matchedHotkey.selector}`);
+        this.showHotkeyNotification(`Element for hotkey "${hotkeyString}" not found.`, 'error');
+      }
+    } else {
+      console.log('No hotkey match found for:', hotkeyString);
+    }
+  }
+
+  performElementAction(element) {
+    const tagName = element.tagName.toLowerCase();
+    const elementType = element.type ? element.type.toLowerCase() : '';
+    
+    console.log('Performing action on element:', tagName, 'type:', elementType);
+
+    // Handle different types of elements appropriately
+    if (tagName === 'input') {
+      // Handle different input types
+      if (['text', 'email', 'password', 'search', 'url', 'tel', 'number'].includes(elementType)) {
+        // Text input fields
+        element.click();
+        element.focus();
+        // Move cursor to end of existing text
+        if (element.value) {
+          element.setSelectionRange(element.value.length, element.value.length);
+        }
+        console.log('Focused text input and set cursor position');
+      } else if (['checkbox', 'radio'].includes(elementType)) {
+        // Checkbox and radio buttons
+        element.click();
+        console.log('Clicked checkbox/radio input');
+      } else if (elementType === 'submit' || elementType === 'button') {
+        // Submit and button inputs
+        element.click();
+        console.log('Clicked submit/button input');
+      } else {
+        // Other input types
+        element.click();
+        element.focus();
+        console.log('Clicked and focused other input type');
+      }
+    } else if (tagName === 'textarea') {
+      // Text areas
+      element.click();
+      element.focus();
+      // Move cursor to end of existing text
+      if (element.value) {
+        element.setSelectionRange(element.value.length, element.value.length);
+      }
+      console.log('Focused textarea and set cursor position');
+    } else if (tagName === 'select') {
+      // Select dropdowns
+      element.click();
+      element.focus();
+      console.log('Focused select dropdown');
+    } else if (element.isContentEditable || element.contentEditable === 'true') {
+      // Content editable elements (like rich text editors)
+      element.click();
+      element.focus();
+      // Move cursor to end of content
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.selectNodeContents(element);
+      range.collapse(false); // Collapse to end
+      selection.removeAllRanges();
+      selection.addRange(range);
+      console.log('Focused content editable element and set cursor to end');
+    } else {
+      // Regular clickable elements (buttons, links, etc.)
+      element.click();
+      console.log('Clicked regular element');
+    }
+  }
+
+  showClickFeedback(element) {
+    const rect = element.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.className = 'element-click-ripple';
+    ripple.style.cssText = `
+      position: absolute;
+      left: ${rect.left + window.scrollX + rect.width / 2}px;
+      top: ${rect.top + window.scrollY + rect.height / 2}px;
+      width: ${Math.max(rect.width, rect.height) * 2}px;
+      height: ${Math.max(rect.width, rect.height) * 2}px;
+      background: rgba(66, 133, 244, 0.4);
+      border-radius: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      animation: ripple-effect 0.6s ease-out;
+      z-index: 9999999;
+      pointer-events: none;
+    `;
+
+    document.body.appendChild(ripple);
+
+    ripple.addEventListener('animationend', () => {
+      ripple.remove();
     });
   }
   
@@ -274,10 +492,15 @@ class ElementPicker {
     event.preventDefault();
     event.stopPropagation();
     
+    // Additional prevention for input elements to avoid immediate focusing
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || event.target.isContentEditable) {
+      event.target.blur(); // Ensure the element doesn't get focused during picking
+    }
+
     if (this.hoveredElement) {
       this.selectElement(this.hoveredElement);
     }
-    
+
     this.stopPicker();
   }
   
@@ -346,7 +569,9 @@ class ElementPicker {
       dateAdded: new Date().toISOString(),
       elementType: element.tagName.toLowerCase(),
       hasId: !!element.id,
-      hasClasses: !!element.className
+      hasClasses: !!element.className,
+      action: 'toggle',
+      hotkey: null
     };
     
     elements.push(newElement);
@@ -672,4 +897,17 @@ class ElementPicker {
 }
 
 // Initialize the element picker
-new ElementPicker(); 
+new ElementPicker();
+
+// Add keyframes for click feedback
+const styleSheet = document.createElement("style");
+styleSheet.type = "text/css";
+styleSheet.innerText = `
+  @keyframes ripple-effect {
+    to {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0;
+    }
+  }
+`;
+document.head.appendChild(styleSheet); 

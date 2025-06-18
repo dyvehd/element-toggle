@@ -92,6 +92,16 @@ class ElementTogglePopup {
     this.openShortcutsBtn.addEventListener('click', () => {
       chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
     });
+
+    // Add event listeners for hotkey buttons
+    const hotkeyButtons = this.elementsList.querySelectorAll('.hotkey-btn');
+    hotkeyButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const tabUrl = e.target.dataset.tabUrl;
+        const index = parseInt(e.target.dataset.index);
+        this.recordHotkey(tabUrl, index, e.target);
+      });
+    });
   }
   
   showSettingsPage() {
@@ -264,12 +274,13 @@ class ElementTogglePopup {
     this.exportBtn.disabled = false;
     
     const elementsHtml = elements.map((element, index) => {
-      // Show both selectors if they're different
+      const action = element.action || 'toggle'; // Default to toggle for backward compatibility
+      const hotkey = element.hotkey || 'Not Set';
       const smartSelector = this.generateSmartSelector(element.selector);
       const showSmartSelector = smartSelector !== element.selector;
       
       return `
-        <div class="element-item">
+        <div class="element-item" data-action="${action}">
           <div class="element-header">
             <div class="element-info">
               <div class="element-name" data-tab-url="${tabUrl}" data-index="${index}">${element.name || 'Unnamed Element'}</div>
@@ -278,14 +289,31 @@ class ElementTogglePopup {
               <div class="element-text">${element.textContent}</div>
             </div>
             <div class="element-controls">
-              <label class="toggle-switch">
-                <input type="checkbox" ${element.visible ? 'checked' : ''} 
-                       data-tab-url="${tabUrl}" data-index="${index}">
-                <span class="slider"></span>
-              </label>
+              ${action === 'toggle' ? `
+                <label class="toggle-switch">
+                  <input type="checkbox" ${element.visible ? 'checked' : ''} 
+                         data-tab-url="${tabUrl}" data-index="${index}">
+                  <span class="slider"></span>
+                </label>
+              ` : ''}
               <button class="action-btn edit-btn" data-tab-url="${tabUrl}" data-index="${index}" title="Edit Name">✏️</button>
               <button class="action-btn delete-btn" data-tab-url="${tabUrl}" data-index="${index}" title="Remove">×</button>
             </div>
+          </div>
+          <div class="element-footer">
+            <div class="action-control">
+              <label for="action-select-${index}">Action:</label>
+              <select class="action-select" id="action-select-${index}" data-tab-url="${tabUrl}" data-index="${index}">
+                <option value="toggle" ${action === 'toggle' ? 'selected' : ''}>Toggle Visibility</option>
+                <option value="click" ${action === 'click' ? 'selected' : ''}>Simulate Click</option>
+              </select>
+            </div>
+            ${action === 'click' ? `
+              <div class="hotkey-control">
+                <label>Hotkey:</label>
+                <button class="hotkey-btn" data-tab-url="${tabUrl}" data-index="${index}">${hotkey}</button>
+              </div>
+            ` : ''}
           </div>
         </div>
       `;
@@ -330,6 +358,27 @@ class ElementTogglePopup {
         const tabUrl = e.target.dataset.tabUrl;
         const index = parseInt(e.target.dataset.index);
         this.deleteElement(tabUrl, index);
+      });
+    });
+
+    // Add event listeners for action dropdowns
+    const actionSelects = this.elementsList.querySelectorAll('.action-select');
+    actionSelects.forEach(select => {
+      select.addEventListener('change', (e) => {
+        const tabUrl = e.target.dataset.tabUrl;
+        const index = parseInt(e.target.dataset.index);
+        const newAction = e.target.value;
+        this.updateElementAction(tabUrl, index, newAction);
+      });
+    });
+
+    // Add event listeners for hotkey buttons
+    const hotkeyButtons = this.elementsList.querySelectorAll('.hotkey-btn');
+    hotkeyButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const tabUrl = e.target.dataset.tabUrl;
+        const index = parseInt(e.target.dataset.index);
+        this.recordHotkey(tabUrl, index, e.target);
       });
     });
   }
@@ -488,7 +537,9 @@ class ElementTogglePopup {
         smartSelector: element.smartSelector || this.generateSmartSelector(element.selector),
         textContent: element.textContent,
         visible: element.visible !== false, // Default to true
-        dateAdded: element.dateAdded || new Date().toISOString()
+        dateAdded: element.dateAdded || new Date().toISOString(),
+        action: element.action || 'toggle', // Support new property
+        hotkey: element.hotkey || null      // Support new property
       }));
       
       // Add imported elements, avoiding duplicates based on selector
@@ -581,23 +632,27 @@ class ElementTogglePopup {
     const elements = result[tabUrl] || [];
     const method = result.selectorMethod || 'smart';
     
-    // Update all elements visibility
+    // Update all elements visibility that are set to "toggle"
     elements.forEach(element => {
-      element.visible = visible;
+      if ((element.action || 'toggle') === 'toggle') {
+        element.visible = visible;
+      }
     });
     
     // Save to storage
     await chrome.storage.local.set({ [tabUrl]: elements });
     
-    // Send messages to content script for each element
+    // Send messages to content script for each "toggle" element
     elements.forEach(element => {
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'toggleElement',
-        selector: element.selector,
-        smartSelector: element.smartSelector || this.generateSmartSelector(element.selector),
-        method: method,
-        visible: visible
-      });
+      if ((element.action || 'toggle') === 'toggle') {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'toggleElement',
+          selector: element.selector,
+          smartSelector: element.smartSelector || this.generateSmartSelector(element.selector),
+          method: method,
+          visible: visible
+        });
+      }
     });
     
     // Update UI
@@ -727,7 +782,9 @@ class ElementTogglePopup {
         smartSelector: this.generateSmartSelector(selector),
         textContent: elementInfo.textContent || '',
         visible: true,
-        dateAdded: new Date().toISOString()
+        dateAdded: new Date().toISOString(),
+        action: 'toggle',
+        hotkey: null
       };
       
       elements.push(newElement);
@@ -743,6 +800,82 @@ class ElementTogglePopup {
     } catch (error) {
       console.error('Error adding manual selector:', error);
       this.showNotification('Failed to add element. Make sure you\'re on the correct page.', 'error');
+    }
+  }
+
+  async updateElementAction(tabUrl, index, newAction) {
+    const result = await chrome.storage.local.get([tabUrl]);
+    const elements = result[tabUrl] || [];
+
+    if (elements[index]) {
+        elements[index].action = newAction;
+        await chrome.storage.local.set({ [tabUrl]: elements });
+        
+        // Re-render to show/hide relevant controls
+        this.renderElements(elements, tabUrl);
+        // Notify content script of the change
+        this.notifyContentScript();
+    }
+  }
+
+  async recordHotkey(tabUrl, index, button) {
+      // Disable other hotkey buttons to prevent multiple recordings
+      this.elementsList.querySelectorAll('.hotkey-btn').forEach(btn => btn.disabled = true);
+      
+      button.textContent = 'Recording...';
+      button.disabled = false; // Ensure the current button is enabled
+      button.classList.add('recording');
+
+      const keydownListener = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          document.removeEventListener('keydown', keydownListener, true);
+
+          if (e.key === 'Escape') {
+              this.loadElements(); // Re-render to restore button state
+              return;
+          }
+
+          let hotkeyString = '';
+          if (e.ctrlKey) hotkeyString += 'Ctrl+';
+          if (e.altKey) hotkeyString += 'Alt+';
+          if (e.shiftKey) hotkeyString += 'Shift+';
+
+          // Avoid pure modifier keys
+          if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+              hotkeyString += e.key.toUpperCase();
+          } else {
+              // If only a modifier was pressed, don't save
+              this.loadElements();
+              this.showNotification('Please use a combination with a non-modifier key.', 'warning');
+              return;
+          }
+
+          // Save hotkey
+          const result = await chrome.storage.local.get([tabUrl]);
+          const elements = result[tabUrl] || [];
+          if (elements[index]) {
+              elements[index].hotkey = hotkeyString;
+              await chrome.storage.local.set({ [tabUrl]: elements });
+          }
+
+          this.loadElements(); // Re-render to show new hotkey
+          // Notify content script that hotkeys have been updated
+          this.notifyContentScript();
+      };
+
+      document.addEventListener('keydown', keydownListener, true);
+  }
+
+  async notifyContentScript() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab.id) {
+        chrome.tabs.sendMessage(tab.id, { action: 'hotkeysUpdated' });
+      }
+    } catch (error) {
+      console.error("Could not notify content script. Are you on a valid page?", error);
     }
   }
 }

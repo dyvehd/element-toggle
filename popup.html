@@ -671,6 +671,100 @@
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
+
+    /* New styles for click simulation feature */
+    .element-footer {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .action-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .action-control label {
+      font-size: 11px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .action-select {
+      background: white;
+      border: 1px solid #dadce0;
+      border-radius: 3px;
+      padding: 4px 6px;
+      font-size: 11px;
+      color: #333;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .action-select:focus {
+      outline: none;
+      border-color: #4285f4;
+      box-shadow: 0 0 0 1px rgba(66, 133, 244, 0.2);
+    }
+
+    .hotkey-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hotkey-control label {
+      font-size: 11px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .hotkey-btn {
+      background: #f8f9fa;
+      border: 1px solid #dadce0;
+      border-radius: 3px;
+      padding: 4px 8px;
+      font-size: 10px;
+      color: #333;
+      cursor: pointer;
+      min-width: 60px;
+      text-align: center;
+      font-family: 'Courier New', monospace;
+      transition: all 0.2s;
+    }
+
+    .hotkey-btn:hover {
+      background: #e8f0fe;
+      border-color: #4285f4;
+    }
+
+    .hotkey-btn.recording {
+      background: #fbbc05;
+      border-color: #f9ab00;
+      color: #000;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .element-item[data-action="click"] .element-header {
+      background: #f0f7ff;
+      border-left: 3px solid #4285f4;
+    }
+
+    .element-item[data-action="toggle"] .element-header {
+      background: #f8fff4;
+      border-left: 3px solid #34a853;
+    }
   </style>
 </head>
 <body>
@@ -762,17 +856,26 @@
         <div class="hotkey-info">
           <div class="hotkey-setup">
             <div class="hotkey-description-text">
-              Set up custom keyboard shortcuts to quickly hide/show all tracked elements.
+              Set up custom keyboard shortcuts to quickly hide/show all tracked elements, or use the click simulation feature for individual elements.
             </div>
             <div class="hotkey-available">
-              <strong>Available commands:</strong>
+              <strong>Global shortcuts:</strong>
               <ul class="hotkey-commands-list">
-                <li>Hide all tracked elements</li>
-                <li>Show all tracked elements</li>
+                <li><strong>Double-Esc:</strong> Unfocus any input field (escape hotkey trap)</li>
+                <li>Hide all tracked elements (set in Chrome shortcuts)</li>
+                <li>Show all tracked elements (set in Chrome shortcuts)</li>
+              </ul>
+            </div>
+            <div class="hotkey-available">
+              <strong>Per-element click shortcuts:</strong>
+              <ul class="hotkey-commands-list">
+                <li>Set custom hotkeys for individual elements</li>
+                <li>Works on buttons, links, inputs, textareas, etc.</li>
+                <li>Automatically focuses text inputs for immediate typing</li>
               </ul>
             </div>
             <div class="hotkey-instructions">
-              <strong>How to set up hotkeys:</strong>
+              <strong>How to set up Chrome shortcuts:</strong>
               <ol class="hotkey-steps">
                 <li>Go to <strong>chrome://extensions/shortcuts</strong></li>
                 <li>Find "Element Toggle" in the list</li>
@@ -783,7 +886,7 @@
             <button id="openShortcutsBtn" class="shortcuts-btn">Open Shortcuts Settings</button>
           </div>
           <div class="hotkey-note">
-            💡 Choose combinations that don't conflict with your other applications
+            💡 If you get "trapped" in a text input, quickly press <strong>Esc twice</strong> to unfocus and use other hotkeys again
           </div>
         </div>
       </div>
