@@ -2,7 +2,6 @@ class ElementPicker {
   constructor() {
     this.isActive = false;
     this.hoveredElement = null;
-    this.originalOutline = null;
     this.overlay = null;
     
     this.handleMouseMove = this.handleMouseMove.bind(this);
@@ -123,57 +122,61 @@ class ElementPicker {
   
   // Enhanced element finding that tries multiple methods
   findElementWithFallback(selector, smartSelector, method = 'smart') {
-    try {
-      if (method === 'exact') {
-        // Only try exact selector
-        return document.querySelector(selector);
-      } else if (method === 'smart') {
-        // Try multiple approaches in order
-        
-        // 1. Try exact selector first
-        let element = document.querySelector(selector);
-        if (element) {
-          console.log('Found element with exact selector:', selector);
-          return element;
-        }
-        
-        // 2. Try provided smart selector
-        if (smartSelector && smartSelector !== selector) {
-          element = document.querySelector(smartSelector);
-          if (element) {
-            console.log('Found element with provided smart selector:', smartSelector);
-            return element;
-          }
-        }
-        
-        // 3. Generate and try smart selector if not provided
-        if (!smartSelector) {
-          const generatedSmartSelector = this.generateSmartSelector(selector);
-          if (generatedSmartSelector !== selector) {
-            element = document.querySelector(generatedSmartSelector);
-            if (element) {
-              console.log('Found element with generated smart selector:', generatedSmartSelector);
-              return element;
-            }
-          }
-        }
-        
-        // 4. Try minimal selector as last resort
-        const minimalSelector = this.generateMinimalSelector(selector);
-        if (minimalSelector && minimalSelector !== selector) {
-          element = document.querySelector(minimalSelector);
-          if (element) {
-            console.log('Found element with minimal selector:', minimalSelector);
-            return element;
-          }
-        }
-        
-        console.warn('Could not find element with any selector method for:', selector);
+    const trySelector = (sel) => {
+      if (!sel) return null;
+      try {
+        return document.querySelector(sel);
+      } catch (e) {
+        // console.warn(`Invalid selector: ${sel}`, e);
         return null;
       }
-    } catch (error) {
-      console.error('Error finding element:', error);
-      return null;
+    };
+    
+    if (method === 'exact') {
+      return trySelector(selector);
+    } 
+    
+    // Smart method
+    // 1. Try exact selector first
+    let element = trySelector(selector);
+    if (element) return element;
+    
+    // 2. Try provided smart selector
+    if (smartSelector && smartSelector !== selector) {
+      element = trySelector(smartSelector);
+      if (element) return element;
+    }
+    
+    // 3. Generate and try a new smart selector
+    const generatedSmartSelector = this.generateSmartSelector(selector);
+    if (generatedSmartSelector !== selector) {
+      element = trySelector(generatedSmartSelector);
+      if (element) return element;
+    }
+    
+    // 4. Try minimal selector as last resort
+    const minimalSelector = this.generateMinimalSelector(selector);
+    if (minimalSelector && minimalSelector !== selector) {
+      element = trySelector(minimalSelector);
+      if (element) return element;
+    }
+
+    // 5. If it's a complex selector, try finding by a more stable parent
+    if (selector.includes('>')) {
+      const parts = selector.split('>');
+      if (parts.length > 1) {
+        const parentSelector = parts.slice(0, -1).join('>').trim();
+        try {
+          const parent = document.querySelector(parentSelector);
+          if (parent) {
+             // If parent is found, try finding the child within it
+             const childSelector = parts[parts.length - 1].trim();
+             return parent.querySelector(childSelector);
+          }
+        } catch (e) {
+            // silent fail
+        }
+      }
     }
     
     return null;
@@ -189,7 +192,12 @@ class ElementPicker {
     document.addEventListener('click', this.handleClick, true);
     document.addEventListener('keydown', this.handleKeyDown, true);
     
+    // Add visual indicators
     document.body.style.cursor = 'crosshair';
+    document.body.classList.add('element-picker-active');
+    
+    // Show helpful notification
+    this.showPickerNotification('Click on any element to select it, or press ESC to cancel', 'info');
   }
   
   stopPicker() {
@@ -203,7 +211,16 @@ class ElementPicker {
     document.removeEventListener('click', this.handleClick, true);
     document.removeEventListener('keydown', this.handleKeyDown, true);
     
+    // Clean up visual indicators
     document.body.style.cursor = '';
+    document.body.classList.remove('element-picker-active');
+    
+    // Remove any picker-related notifications
+    const pickerNotifications = document.querySelectorAll('.element-picker-notification:not(.success):not(.error)');
+    pickerNotifications.forEach(notification => {
+      notification.classList.add('slide-out');
+      setTimeout(() => notification.remove(), 300);
+    });
   }
   
   createOverlay() {
@@ -236,11 +253,21 @@ class ElementPicker {
     event.stopPropagation();
     
     const element = document.elementFromPoint(event.clientX, event.clientY);
-    if (element && element !== this.hoveredElement) {
-      this.clearHighlight();
-      this.highlightElement(element);
-      this.hoveredElement = element;
+    
+    // Skip if no element found or if it's the same element or if it's the overlay
+    if (!element || element === this.hoveredElement || element === this.overlay) {
+      return;
     }
+    
+    // Skip if the element is part of our extension's UI
+    if (element.id === 'element-picker-overlay' || 
+        element.classList.contains('element-picker-highlight') ||
+        element.classList.contains('element-picker-notification')) {
+      return;
+    }
+    
+    // Highlight the new element
+    this.highlightElement(element);
   }
   
   handleClick(event) {
@@ -263,20 +290,28 @@ class ElementPicker {
   }
   
   highlightElement(element) {
-    this.originalOutline = element.style.outline;
-    element.style.outline = '2px solid #4285f4';
-    element.style.outlineOffset = '1px';
+    // Clear any existing highlight first
+    this.clearHighlight();
+    
+    // Add the CSS class for enhanced highlighting
+    element.classList.add('element-picker-highlight');
+    
+    // Store the element for cleanup
+    this.hoveredElement = element;
   }
   
   clearHighlight() {
-    if (this.hoveredElement && this.originalOutline !== null) {
-      this.hoveredElement.style.outline = this.originalOutline;
+    if (this.hoveredElement) {
+      // Remove the highlight class
+      this.hoveredElement.classList.remove('element-picker-highlight');
       this.hoveredElement = null;
-      this.originalOutline = null;
     }
   }
   
   async selectElement(element) {
+    // Clear highlighting before generating selector to avoid including picker classes
+    this.clearHighlight();
+    
     const selector = this.generateSelector(element);
     const smartSelector = this.generateSmartSelector(selector);
     const textContent = element.textContent.trim().substring(0, 100);
@@ -412,83 +447,65 @@ class ElementPicker {
   }
   
   generateSelector(element) {
-    // Try to generate a unique selector
-    if (element.id) {
-      return `#${element.id}`;
-    }
-    
-    // Try class-based selector
-    if (element.className) {
-      const classes = element.className.split(' ').filter(c => c.trim());
-      if (classes.length > 0) {
-        const classSelector = `.${classes.join('.')}`;
-        if (document.querySelectorAll(classSelector).length === 1) {
-          return classSelector;
-        }
-      }
-    }
-    
-    // Generate path-based selector
     const path = [];
     let current = element;
     
-    while (current && current !== document.body) {
-      let selector = current.tagName.toLowerCase();
+    // Traverse up from the element to the body
+    while (current && current.parentNode && current !== document.body) {
+      let segment = current.tagName.toLowerCase();
       
+      // If the current element has an ID, we've found our anchor.
+      // Prepend it to the path and break the loop.
       if (current.id) {
-        selector += `#${current.id}`;
-        path.unshift(selector);
+        segment = `#${CSS.escape(current.id)}`;
+        path.unshift(segment);
         break;
       }
       
-      if (current.className) {
-        const classes = current.className.split(' ').filter(c => c.trim());
-        if (classes.length > 0) {
-          selector += `.${classes.slice(0, 2).join('.')}`;
-        }
+      const parent = current.parentNode;
+      
+      // Check if the tag name alone is unique among its siblings
+      const sameTagSiblings = Array.from(parent.children).filter(
+        child => child.tagName === current.tagName
+      );
+      
+      // If the tag isn't unique, or if we need more specificity, add nth-child
+      if (sameTagSiblings.length > 1) {
+        const index = Array.from(parent.children).indexOf(current) + 1;
+        segment += `:nth-child(${index})`;
       }
       
-      // Add nth-child if needed for uniqueness
-      const siblings = Array.from(current.parentNode?.children || [])
-        .filter(el => el.tagName === current.tagName);
-      
-      if (siblings.length > 1) {
-        const index = siblings.indexOf(current) + 1;
-        selector += `:nth-child(${index})`;
-      }
-      
-      path.unshift(selector);
-      current = current.parentNode;
+      path.unshift(segment);
+      current = parent;
     }
     
+    // If the loop finished without finding an ID, the path is relative to the body
     return path.join(' > ');
   }
   
   showSelectionFeedback(element, elementName) {
+    // Remove any existing notifications
+    const existingNotifications = document.querySelectorAll('.element-picker-notification');
+    existingNotifications.forEach(notification => {
+      notification.classList.add('slide-out');
+      setTimeout(() => notification.remove(), 300);
+    });
+    
     const feedback = document.createElement('div');
+    feedback.className = 'element-picker-notification success';
     feedback.innerHTML = `
       <div style="font-weight: 500;">✓ Element selected!</div>
-      <div style="font-size: 11px; margin-top: 4px; opacity: 0.9;">${elementName}</div>
-    `;
-    feedback.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #4285f4;
-      color: white;
-      padding: 12px 16px;
-      border-radius: 6px;
-      font-family: sans-serif;
-      font-size: 14px;
-      z-index: 1000000;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      max-width: 250px;
+      <div style="font-size: 12px; margin-top: 4px; opacity: 0.9;">${elementName}</div>
     `;
     
     document.body.appendChild(feedback);
     
+    // Auto-remove after 3 seconds with slide-out animation
     setTimeout(() => {
-      feedback.remove();
+      if (feedback.parentNode) {
+        feedback.classList.add('slide-out');
+        setTimeout(() => feedback.remove(), 300);
+      }
     }, 3000);
   }
   
@@ -578,6 +595,31 @@ class ElementPicker {
     }
   }
   
+  showPickerNotification(message, type = 'info') {
+    // Remove any existing picker notifications
+    const existingNotifications = document.querySelectorAll('.element-picker-notification');
+    existingNotifications.forEach(notification => {
+      if (!notification.classList.contains('success') && !notification.classList.contains('error')) {
+        notification.classList.add('slide-out');
+        setTimeout(() => notification.remove(), 300);
+      }
+    });
+    
+    const notification = document.createElement('div');
+    notification.className = `element-picker-notification ${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 4 seconds (longer for instructional messages)
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.classList.add('slide-out');
+        setTimeout(() => notification.remove(), 300);
+      }
+    }, 4000);
+  }
+
   showHotkeyNotification(message, type = 'info') {
     // Remove any existing notifications
     const existingNotifications = document.querySelectorAll('.element-toggle-hotkey-notification');

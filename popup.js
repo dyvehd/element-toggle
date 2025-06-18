@@ -677,32 +677,20 @@ class ElementTogglePopup {
   
   validateManualSelector() {
     const selector = this.manualSelectorInput.value.trim();
-    const isValid = selector.length > 0 && this.isValidSelector(selector);
-    this.addSelectorBtn.disabled = !isValid;
-    
-    // Visual feedback for invalid selectors
-    if (selector.length > 0 && !isValid) {
-      this.manualSelectorInput.style.borderColor = '#ea4335';
-      this.manualSelectorInput.style.color = '#ea4335';
-    } else {
-      this.manualSelectorInput.style.borderColor = '#dadce0';
-      this.manualSelectorInput.style.color = '#333';
-    }
+    this.addSelectorBtn.disabled = selector.length === 0;
   }
   
   isValidSelector(selector) {
-    try {
-      document.querySelector(selector);
-      return true;
-    } catch (e) {
-      return false;
-    }
+    // This check is now primarily done in the content script (testSelector)
+    // for better accuracy in the context of the page.
+    // We only do a basic check here to enable the button.
+    return selector.length > 0;
   }
   
   async addManualSelector() {
     const selector = this.manualSelectorInput.value.trim();
-    if (!selector || !this.isValidSelector(selector)) {
-      this.showNotification('Please enter a valid CSS selector', 'error');
+    if (!selector) {
+      this.showNotification('Please enter a CSS selector', 'error');
       return;
     }
     
