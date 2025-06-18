@@ -8,16 +8,28 @@ class ElementTogglePopup {
     this.hideAllBtn = document.getElementById('hideAllBtn');
     this.exportBtn = document.getElementById('exportBtn');
     this.importInput = document.getElementById('importInput');
-    this.autoRestoreToggle = document.getElementById('autoRestoreToggle');
-    this.selectorMethodSelect = document.getElementById('selectorMethodSelect');
     this.settingsBtn = document.getElementById('settingsBtn');
     this.backBtn = document.getElementById('backBtn');
     this.mainPage = document.getElementById('mainPage');
     this.settingsPage = document.getElementById('settingsPage');
     this.manualSelectorInput = document.getElementById('manualSelectorInput');
     this.addSelectorBtn = document.getElementById('addSelectorBtn');
-    this.clearSelectorBtn = document.getElementById('clearSelectorBtn');
+    this.clearSelectorBtn = document.getElementById('clearSelectorBtn'); // might be null if button removed
     this.openShortcutsBtn = document.getElementById('openShortcutsBtn');
+    
+    // Settings elements
+    this.autoRestore = document.getElementById('autoRestore');
+    this.selectorMethodSelect = document.getElementById('selectorMethodSelect');
+    
+    // Unfocus hotkey settings
+    this.enableUnfocusHotkey = document.getElementById('enableUnfocusHotkey');
+    this.globalUnfocusHotkey = document.getElementById('globalUnfocusHotkey');
+    this.recordGlobalUnfocusHotkey = document.getElementById('recordGlobalUnfocusHotkey');
+    this.enableSiteSpecificUnfocus = document.getElementById('enableSiteSpecificUnfocus');
+    this.siteUnfocusHotkeyList = document.getElementById('siteUnfocusHotkeyList');
+    this.addSiteUnfocusHotkey = document.getElementById('addSiteUnfocusHotkey');
+    this.unfocusHotkeySettings = document.getElementById('unfocusHotkeySettings');
+    this.siteSpecificUnfocusSettings = document.getElementById('siteSpecificUnfocusSettings');
     
     // Selector editor modal elements
     this.selectorEditorModal = document.getElementById('selectorEditorModal');
@@ -32,6 +44,11 @@ class ElementTogglePopup {
     // Current editing context
     this.currentEditingTabUrl = null;
     this.currentEditingIndex = null;
+    
+    // Hotkey recording state
+    this.isRecordingHotkey = false;
+    this.currentRecordingInput = null;
+    this.currentElementContext = null;
     
     this.init();
   }
@@ -56,20 +73,12 @@ class ElementTogglePopup {
       this.toggleAllElements(false);
     });
     
-    this.exportBtn.addEventListener('click', () => {
+    this.exportBtn.addEventListener('change', () => {
       this.exportSettings();
     });
     
     this.importInput.addEventListener('change', (e) => {
       this.importSettings(e);
-    });
-    
-    this.autoRestoreToggle.addEventListener('change', () => {
-      this.saveSettings();
-    });
-    
-    this.selectorMethodSelect.addEventListener('change', () => {
-      this.saveSettings();
     });
     
     this.settingsBtn.addEventListener('click', () => {
@@ -96,11 +105,13 @@ class ElementTogglePopup {
       this.addManualSelector();
     });
     
-    this.clearSelectorBtn.addEventListener('click', () => {
-      this.manualSelectorInput.value = '';
-      this.validateManualSelector();
-      this.manualSelectorInput.focus();
-    });
+    if (this.clearSelectorBtn) {
+      this.clearSelectorBtn.addEventListener('click', () => {
+        this.manualSelectorInput.value = '';
+        this.validateManualSelector();
+        this.manualSelectorInput.focus();
+      });
+    }
     
     // Open shortcuts settings
     this.openShortcutsBtn.addEventListener('click', () => {
@@ -134,6 +145,34 @@ class ElementTogglePopup {
     // Real-time validation of pattern selector
     this.patternSelector.addEventListener('input', () => {
       this.validateSelectorPattern();
+    });
+
+    // Unfocus hotkey settings
+    this.enableUnfocusHotkey.addEventListener('change', () => {
+      this.toggleUnfocusHotkeySettings();
+      this.saveSettings();
+    });
+
+    this.enableSiteSpecificUnfocus.addEventListener('change', () => {
+      this.toggleSiteSpecificUnfocusSettings();
+      this.saveSettings();
+    });
+
+    this.recordGlobalUnfocusHotkey.addEventListener('click', () => {
+      this.startRecordingHotkey(this.globalUnfocusHotkey, this.recordGlobalUnfocusHotkey);
+    });
+
+    this.addSiteUnfocusHotkey.addEventListener('click', () => {
+      this.addSiteSpecificUnfocusHotkey();
+    });
+
+    // Settings
+    this.autoRestore.addEventListener('change', () => {
+      this.saveSettings();
+    });
+
+    this.selectorMethodSelect.addEventListener('change', () => {
+      this.saveSettings();
     });
 
     // Add event listeners for hotkey buttons
@@ -350,15 +389,22 @@ class ElementTogglePopup {
     const elementsHtml = elements.map((element, index) => {
       const action = element.action || 'toggle'; // Default to toggle for backward compatibility
       const hotkey = element.hotkey || 'Not Set';
-      const smartSelector = this.generateSmartSelector(element.selector);
-      const showSmartSelector = smartSelector !== element.selector;
+      
+      // Decide which selector to show as primary (pattern > selector)
+      const primarySelector = element.patternSelector || element.selector;
+      const secondarySelector = element.patternSelector ? element.selector : null;
+      
+      // Generate smart selector based on primarySelector (only if it's not already a pattern)
+      const smartSelector = this.generateSmartSelector(primarySelector);
+      const showSmartSelector = smartSelector !== primarySelector && !primarySelector.includes('*');
       
       return `
         <div class="element-item" data-action="${action}">
           <div class="element-header">
             <div class="element-info">
               <div class="element-name" data-tab-url="${tabUrl}" data-index="${index}">${element.name || 'Unnamed Element'}</div>
-              <div class="element-selector" title="Original Selector">${element.selector}</div>
+              <div class="element-selector" title="${element.patternSelector ? 'Pattern Selector' : 'Original Selector'}">${primarySelector}</div>
+              ${secondarySelector ? `<div class="element-selector" style="color:#9aa0a6;font-style:italic;" title="Original Selector (read-only)">${secondarySelector}</div>` : ''}
               ${showSmartSelector ? `<div class="element-selector" style="color: #4285f4; font-style: italic;" title="Smart Selector">${smartSelector}</div>` : ''}
               <div class="element-text">${element.textContent}</div>
             </div>
@@ -705,7 +751,7 @@ class ElementTogglePopup {
     
     setTimeout(() => {
       notification.remove();
-    }, 3000);
+    }, 1000);
   }
   
   async toggleAllElements(visible) {
@@ -794,97 +840,211 @@ class ElementTogglePopup {
   }
   
   async loadSettings() {
-    const result = await chrome.storage.local.get(['autoRestore', 'selectorMethod']);
-    const autoRestore = result.autoRestore !== undefined ? result.autoRestore : false; // Default to false
-    const selectorMethod = result.selectorMethod || 'smart'; // Default to smart
+    const result = await chrome.storage.local.get([
+      'autoRestore', 
+      'selectorMethod',
+      'enableUnfocusHotkey',
+      'globalUnfocusHotkey',
+      'enableSiteSpecificUnfocus',
+      'siteUnfocusHotkeys'
+    ]);
     
-    this.autoRestoreToggle.checked = autoRestore;
-    this.selectorMethodSelect.value = selectorMethod;
+    // Load basic settings
+    this.autoRestore.checked = result.autoRestore !== undefined ? result.autoRestore : false;
+    this.selectorMethodSelect.value = result.selectorMethod || 'smart';
+    
+    // Load unfocus settings (all off by default)
+    this.enableUnfocusHotkey.checked = result.enableUnfocusHotkey || false;
+    this.globalUnfocusHotkey.value = result.globalUnfocusHotkey || 'Alt+Shift+U';
+    this.enableSiteSpecificUnfocus.checked = result.enableSiteSpecificUnfocus || false;
+    
+    // Toggle visibility based on settings
+    this.toggleUnfocusHotkeySettings();
+    this.toggleSiteSpecificUnfocusSettings();
+    
+    // Load site-specific hotkeys
+    const siteHotkeys = result.siteUnfocusHotkeys || {};
+    this.renderSiteSpecificUnfocusHotkeys(siteHotkeys);
   }
   
   async saveSettings() {
-    const autoRestore = this.autoRestoreToggle.checked;
-    const selectorMethod = this.selectorMethodSelect.value;
+    const settings = {
+      autoRestore: this.autoRestore.checked,
+      selectorMethod: this.selectorMethodSelect.value,
+      enableUnfocusHotkey: this.enableUnfocusHotkey.checked,
+      globalUnfocusHotkey: this.globalUnfocusHotkey.value || 'Alt+Shift+U',
+      enableSiteSpecificUnfocus: this.enableSiteSpecificUnfocus.checked
+    };
     
-    await chrome.storage.local.set({ 
-      autoRestore: autoRestore,
-      selectorMethod: selectorMethod
-    });
+    await chrome.storage.local.set(settings);
+    console.log('Settings saved:', settings);
     
-    // If method changed, re-render to show updated selectors
-    this.loadElements();
+    // Notify content script of settings changes
+    this.notifyContentScript();
   }
   
   validateManualSelector() {
     const selector = this.manualSelectorInput.value.trim();
-    this.addSelectorBtn.disabled = selector.length === 0;
+
+    // If empty, reset button state
+    if (!selector) {
+      this.addSelectorBtn.disabled = true;
+      this.addSelectorBtn.textContent = 'Add Selector';
+      this.addSelectorBtn.style.background = '#ccc';
+      return;
+    }
+
+    const isValid = this.isValidSelector(selector);
+
+    // Check if it's a pattern selector
+    const isPattern = selector.includes('*') ||
+                     selector.includes('[text=') ||
+                     selector.includes('[icon=');
+
+    if (isPattern) {
+      // For pattern selectors, validate the converted CSS
+      try {
+        const cssSelector = this.convertPatternToCSS(selector);
+        const patternValid = this.isValidSelector(cssSelector);
+
+        this.addSelectorBtn.disabled = !patternValid;
+        this.addSelectorBtn.textContent = patternValid ? 'Add Pattern' : 'Invalid Pattern';
+
+        if (patternValid) {
+          this.addSelectorBtn.style.background = '#34a853'; // Green for patterns
+        } else {
+          this.addSelectorBtn.style.background = '#ea4335'; // Red for invalid
+        }
+      } catch (error) {
+        this.addSelectorBtn.disabled = true;
+        this.addSelectorBtn.textContent = 'Invalid Pattern';
+        this.addSelectorBtn.style.background = '#ea4335';
+      }
+    } else {
+      // Regular selector validation
+      this.addSelectorBtn.disabled = !isValid;
+      this.addSelectorBtn.textContent = isValid ? 'Add Selector' : 'Invalid Selector';
+      this.addSelectorBtn.style.background = isValid ? '#4285f4' : '#ea4335';
+    }
   }
   
   isValidSelector(selector) {
-    // This check is now primarily done in the content script (testSelector)
-    // for better accuracy in the context of the page.
-    // We only do a basic check here to enable the button.
-    return selector.length > 0;
+    if (!selector) return false;
+    
+    try {
+      document.querySelector(selector);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
   
   async addManualSelector() {
     const selector = this.manualSelectorInput.value.trim();
-    if (!selector) {
-      this.showNotification('Please enter a CSS selector', 'error');
-      return;
-    }
+    if (!selector) return;
+    
+    const isPattern = selector.includes('*') || 
+                     selector.includes('[text=') || 
+                     selector.includes('[icon=');
     
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      // Test if element exists on current page
-      const elementInfo = await chrome.tabs.sendMessage(tab.id, {
-        action: 'testSelector',
-        selector: selector
-      });
-      
-      if (!elementInfo || !elementInfo.found) {
-        this.showNotification('Element not found on current page', 'error');
-        return;
-      }
-      
-      // Add the element
       const tabUrl = new URL(tab.url).hostname;
+      
+      // Get existing elements
       const result = await chrome.storage.local.get([tabUrl]);
       const elements = result[tabUrl] || [];
       
       // Check if element already exists
-      const existingIndex = elements.findIndex(el => el.selector === selector);
+      const existingIndex = elements.findIndex(el => 
+        el.selector === selector || 
+        el.patternSelector === selector
+      );
+      
       if (existingIndex !== -1) {
-        this.showNotification('Element with this selector already exists', 'error');
+        this.showNotification('This selector/pattern is already being tracked!', 'warning');
         return;
       }
       
-      // Create new element entry
-      const newElement = {
-        name: elementInfo.suggestedName || 'Manual Element',
-        selector: selector,
-        smartSelector: this.generateSmartSelector(selector),
-        textContent: elementInfo.textContent || '',
-        visible: true,
-        dateAdded: new Date().toISOString(),
-        action: 'toggle',
-        hotkey: null
-      };
+      let elementData;
       
-      elements.push(newElement);
+      if (isPattern) {
+        // Handle pattern selector
+        elementData = {
+          name: `Pattern: ${selector.substring(0, 30)}${selector.length > 30 ? '...' : ''}`,
+          selector: selector, // Store original pattern as selector
+          patternSelector: selector, // Also store as pattern
+          smartSelector: selector,
+          textContent: 'Pattern-based element',
+          visible: true,
+          dateAdded: new Date().toISOString(),
+          elementType: 'pattern',
+          hasId: false,
+          hasClasses: false,
+          action: 'toggle',
+          hotkey: null,
+          isPattern: true
+        };
+        
+        this.showNotification('Pattern selector added successfully!', 'success');
+      } else {
+        // Handle regular selector - test it first
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          action: 'testSelector',
+          selector: selector
+        });
+        
+        if (response && response.found) {
+          elementData = {
+            name: response.suggestedName || `Manual: ${selector.substring(0, 20)}${selector.length > 20 ? '...' : ''}`,
+            selector: selector,
+            smartSelector: response.smartSelector || selector,
+            textContent: response.textContent || '',
+            visible: true,
+            dateAdded: new Date().toISOString(),
+            elementType: response.elementType || 'unknown',
+            hasId: response.hasId || false,
+            hasClasses: response.hasClasses || false,
+            action: 'toggle',
+            hotkey: null
+          };
+          
+          this.showNotification('Selector added successfully!', 'success');
+        } else {
+          this.showNotification('Element not found on current page. Added as pattern.', 'warning');
+          
+          // Add as pattern even if not found on current page
+          elementData = {
+            name: `Manual: ${selector.substring(0, 30)}${selector.length > 30 ? '...' : ''}`,
+            selector: selector,
+            smartSelector: selector,
+            textContent: 'Manual selector',
+            visible: true,
+            dateAdded: new Date().toISOString(),
+            elementType: 'manual',
+            hasId: false,
+            hasClasses: false,
+            action: 'toggle',
+            hotkey: null
+          };
+        }
+      }
+      
+      // Add the element
+      elements.push(elementData);
       await chrome.storage.local.set({ [tabUrl]: elements });
       
-      // Clear input and refresh display
+      // Clear input and re-render
       this.manualSelectorInput.value = '';
       this.validateManualSelector();
       this.renderElements(elements, tabUrl);
       
-      this.showNotification('Element added successfully!', 'success');
+      // Notify content script
+      this.notifyContentScript();
       
     } catch (error) {
       console.error('Error adding manual selector:', error);
-      this.showNotification('Failed to add element. Make sure you\'re on the correct page.', 'error');
+      this.showNotification('Failed to add selector', 'error');
     }
   }
 
@@ -904,53 +1064,53 @@ class ElementTogglePopup {
   }
 
   async recordHotkey(tabUrl, index, button) {
-      // Disable other hotkey buttons to prevent multiple recordings
-      this.elementsList.querySelectorAll('.hotkey-btn').forEach(btn => btn.disabled = true);
+    // Use the new enhanced hotkey recording system
+    this.currentElementContext = { tabUrl, index, button };
+    this.startRecordingHotkey(button, button, true);
+  }
+
+  handleHotkeyRecording(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Skip modifier-only keys
+    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+      return;
+    }
+    
+    // Build hotkey string with enhanced modifier support
+    let hotkeyString = '';
+    if (e.ctrlKey) hotkeyString += 'Ctrl+';
+    if (e.altKey) hotkeyString += 'Alt+';
+    if (e.shiftKey) hotkeyString += 'Shift+';
+    if (e.metaKey) hotkeyString += 'Meta+';
+    
+    // Add the key
+    let keyName = e.key;
+    if (keyName === ' ') keyName = 'Space';
+    else if (keyName.length === 1) keyName = keyName.toUpperCase();
+    
+    hotkeyString += keyName;
+    
+    // Set the value and stop recording
+    if (this.currentRecordingInput) {
+      this.currentRecordingInput.value = hotkeyString;
+      this.currentRecordingInput.textContent = hotkeyString;
       
-      button.textContent = 'Recording...';
-      button.disabled = false; // Ensure the current button is enabled
-      button.classList.add('recording');
-
-      const keydownListener = async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          document.removeEventListener('keydown', keydownListener, true);
-
-          if (e.key === 'Escape') {
-              this.loadElements(); // Re-render to restore button state
-              return;
-          }
-
-          let hotkeyString = '';
-          if (e.ctrlKey) hotkeyString += 'Ctrl+';
-          if (e.altKey) hotkeyString += 'Alt+';
-          if (e.shiftKey) hotkeyString += 'Shift+';
-
-          // Avoid pure modifier keys
-          if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
-              hotkeyString += e.key.toUpperCase();
-          } else {
-              // If only a modifier was pressed, don't save
-              this.loadElements();
-              this.showNotification('Please use a combination with a non-modifier key.', 'warning');
-              return;
-          }
-
-          // Save hotkey
-          const result = await chrome.storage.local.get([tabUrl]);
-          const elements = result[tabUrl] || [];
-          if (elements[index]) {
-              elements[index].hotkey = hotkeyString;
-              await chrome.storage.local.set({ [tabUrl]: elements });
-          }
-
-          this.loadElements(); // Re-render to show new hotkey
-          // Notify content script that hotkeys have been updated
-          this.notifyContentScript();
-      };
-
-      document.addEventListener('keydown', keydownListener, true);
+      // Save if it's a settings hotkey
+      if (this.currentRecordingInput === this.globalUnfocusHotkey) {
+        this.saveSettings();
+      }
+      
+      // Save if it's an element hotkey
+      if (this.currentElementContext) {
+        const { tabUrl, index } = this.currentElementContext;
+        this.updateElementHotkey(tabUrl, index, hotkeyString);
+        this.currentElementContext = null;
+      }
+    }
+    
+    this.stopRecordingHotkey();
   }
 
   async notifyContentScript() {
@@ -1040,20 +1200,57 @@ class ElementTogglePopup {
       cssSelector = cssSelector.replace(/\[icon="([^"]*)"\]/g, '');
     }
     
-    // Handle ID patterns: #prefix-* becomes [id^="prefix-"]
+    // Enhanced ID patterns handling
+    // Handle complex patterns like #_r_*_ or #prefix-*-suffix
+    cssSelector = cssSelector.replace(/#([^#\s\[\]]*)\*([^#\s\[\]]*)/g, (match, prefix, suffix) => {
+      if (prefix && suffix) {
+        // Pattern like #_r_*_ becomes [id^="_r_"][id$="_"]
+        return `[id^="${prefix}"][id$="${suffix}"]`;
+      } else if (prefix) {
+        // Pattern like #prefix-* becomes [id^="prefix-"]
+        return `[id^="${prefix}"]`;
+      } else if (suffix) {
+        // Pattern like #*-suffix becomes [id$="-suffix"]
+        return `[id$="${suffix}"]`;
+      }
+      return match;
+    });
+    
+    // Handle remaining simple ID patterns: #prefix* becomes [id^="prefix"]
     cssSelector = cssSelector.replace(/#([^#\s\[\]]+)\*/g, '[id^="$1"]');
     cssSelector = cssSelector.replace(/#\*([^#\s\[\]]+)/g, '[id$="$1"]');
-    cssSelector = cssSelector.replace(/#([^#\s\[\]]*)\*([^#\s\[\]]+)/g, '[id*="$1"][id*="$2"]');
     
-    // Handle class patterns: .prefix-* becomes [class*="prefix-"]
+    // Enhanced class patterns handling
+    // Handle complex patterns like .class-*-end
+    cssSelector = cssSelector.replace(/\.([^.\s\[\]]*)\*([^.\s\[\]]*)/g, (match, prefix, suffix) => {
+      if (prefix && suffix) {
+        // Pattern like .btn-*-large becomes [class*="btn-"][class*="-large"]
+        return `[class*="${prefix}"][class*="${suffix}"]`;
+      } else if (prefix) {
+        // Pattern like .btn-* becomes [class*="btn-"]
+        return `[class*="${prefix}"]`;
+      } else if (suffix) {
+        // Pattern like .*-large becomes [class*="-large"]
+        return `[class*="${suffix}"]`;
+      }
+      return match;
+    });
+    
+    // Handle remaining simple class patterns
     cssSelector = cssSelector.replace(/\.([^.\s\[\]]+)\*/g, '[class*="$1"]');
     cssSelector = cssSelector.replace(/\.\*([^.\s\[\]]+)/g, '[class*="$1"]');
-    cssSelector = cssSelector.replace(/\.([^.\s\[\]]*)\*([^.\s\[\]]+)/g, '[class*="$1"][class*="$2"]');
     
-    // Handle attribute patterns: [attr="prefix-*"] becomes [attr^="prefix-"]
-    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*"\]/g, '[$1^="$2"]');
-    cssSelector = cssSelector.replace(/\[([^=]+)="\*([^"]*)"\]/g, '[$1$="$2"]');
-    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*([^"]*)"\]/g, '[$1*="$2"][$1*="$3"]');
+    // Enhanced attribute patterns: [attr="prefix-*-suffix"] becomes [attr*="prefix-"][attr*="-suffix"]
+    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*([^"]*)"\]/g, (match, attr, prefix, suffix) => {
+      if (prefix && suffix) {
+        return `[${attr}*="${prefix}"][${attr}*="${suffix}"]`;
+      } else if (prefix) {
+        return `[${attr}^="${prefix}"]`;
+      } else if (suffix) {
+        return `[${attr}$="${suffix}"]`;
+      }
+      return match;
+    });
     
     // Handle contains attribute patterns: [attr*="value"] (already valid CSS)
     // These don't need conversion
@@ -1184,6 +1381,247 @@ class ElementTogglePopup {
       console.error('Error saving selector pattern:', error);
       this.showNotification('Failed to save selector pattern', 'error');
     }
+  }
+
+  toggleUnfocusHotkeySettings() {
+    const enabled = this.enableUnfocusHotkey.checked;
+    this.unfocusHotkeySettings.style.display = enabled ? 'block' : 'none';
+    this.enableSiteSpecificUnfocus.disabled = !enabled;
+    
+    if (!enabled) {
+      this.enableSiteSpecificUnfocus.checked = false;
+      this.toggleSiteSpecificUnfocusSettings();
+    }
+  }
+
+  toggleSiteSpecificUnfocusSettings() {
+    const enabled = this.enableSiteSpecificUnfocus.checked && this.enableUnfocusHotkey.checked;
+    this.siteSpecificUnfocusSettings.style.display = enabled ? 'block' : 'none';
+  }
+
+  startRecordingHotkey(inputElement, buttonElement, isElementHotkey = false) {
+    if (this.isRecordingHotkey) {
+      this.stopRecordingHotkey();
+      return;
+    }
+
+    this.isRecordingHotkey = true;
+    this.currentRecordingInput = inputElement;
+    
+    // Update UI based on whether it's an element hotkey or settings hotkey
+    if (isElementHotkey) {
+      // Element hotkey button
+      inputElement.classList.add('recording');
+      inputElement.textContent = 'Recording...';
+      inputElement.disabled = false;
+      
+      // Disable other hotkey buttons to prevent conflicts
+      this.elementsList.querySelectorAll('.hotkey-btn').forEach(btn => {
+        if (btn !== inputElement) {
+          btn.disabled = true;
+        }
+      });
+    } else {
+      // Settings hotkey input
+      inputElement.classList.add('recording');
+      inputElement.value = 'Press any key combination...';
+      buttonElement.classList.add('recording');
+      buttonElement.textContent = 'Recording...';
+    }
+    
+    // Cache bound handler so we can remove it later
+    if (!this.boundHotkeyHandler) {
+      this.boundHotkeyHandler = this.handleHotkeyRecording.bind(this);
+    }
+    document.addEventListener('keydown', this.boundHotkeyHandler, true);
+  }
+
+  stopRecordingHotkey() {
+    if (!this.isRecordingHotkey) return;
+    
+    this.isRecordingHotkey = false;
+    if (this.boundHotkeyHandler) {
+      document.removeEventListener('keydown', this.boundHotkeyHandler, true);
+    }
+    
+    // Reset UI
+    if (this.currentRecordingInput) {
+      this.currentRecordingInput.classList.remove('recording');
+    }
+    
+    // Reset all record buttons (settings)
+    document.querySelectorAll('.hotkey-record-btn.recording').forEach(btn => {
+      btn.classList.remove('recording');
+      btn.textContent = 'Record';
+    });
+    
+    // Re-enable all hotkey buttons (elements)
+    this.elementsList.querySelectorAll('.hotkey-btn').forEach(btn => {
+      btn.disabled = false;
+      btn.classList.remove('recording');
+    });
+    
+    this.currentRecordingInput = null;
+  }
+
+  async addSiteSpecificUnfocusHotkey() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const domain = new URL(tab.url).hostname;
+      
+      // Create a new site hotkey item
+      const item = document.createElement('div');
+      item.className = 'site-hotkey-item';
+      
+      item.innerHTML = `
+        <div class="site-hotkey-domain">${domain}</div>
+        <input type="text" class="site-hotkey-value" placeholder="Click to record..." readonly>
+        <button class="site-hotkey-remove" title="Remove">×</button>
+      `;
+      
+      // Add event listeners
+      const hotkeyInput = item.querySelector('.site-hotkey-value');
+      const removeBtn = item.querySelector('.site-hotkey-remove');
+      
+      hotkeyInput.addEventListener('click', () => {
+        this.startRecordingSiteHotkey(hotkeyInput, domain);
+      });
+      
+      removeBtn.addEventListener('click', () => {
+        item.remove();
+        this.saveSiteSpecificUnfocusHotkeys();
+      });
+      
+      this.siteUnfocusHotkeyList.appendChild(item);
+      
+      // Start recording immediately
+      this.startRecordingSiteHotkey(hotkeyInput, domain);
+      
+    } catch (error) {
+      console.error('Error adding site-specific hotkey:', error);
+    }
+  }
+
+  startRecordingSiteHotkey(inputElement, domain) {
+    if (this.isRecordingHotkey) {
+      this.stopRecordingHotkey();
+      return;
+    }
+    
+    this.isRecordingHotkey = true;
+    this.currentRecordingInput = inputElement;
+    
+    inputElement.classList.add('recording');
+    inputElement.value = 'Press any key combination...';
+    
+    // Store domain for saving
+    this.currentRecordingDomain = domain;
+    
+    if (!this.boundSiteHotkeyHandler) {
+      this.boundSiteHotkeyHandler = this.handleSiteHotkeyRecording.bind(this);
+    }
+    document.addEventListener('keydown', this.boundSiteHotkeyHandler, true);
+  }
+
+  handleSiteHotkeyRecording(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+      return;
+    }
+    
+    let hotkeyString = '';
+    if (e.ctrlKey) hotkeyString += 'Ctrl+';
+    if (e.altKey) hotkeyString += 'Alt+';
+    if (e.shiftKey) hotkeyString += 'Shift+';
+    if (e.metaKey) hotkeyString += 'Meta+';
+    
+    let keyName = e.key;
+    if (keyName === ' ') keyName = 'Space';
+    else if (keyName.length === 1) keyName = keyName.toUpperCase();
+    
+    hotkeyString += keyName;
+    
+    if (this.currentRecordingInput) {
+      this.currentRecordingInput.value = hotkeyString;
+      this.currentRecordingInput.classList.remove('recording');
+    }
+    
+    this.isRecordingHotkey = false;
+    this.currentRecordingInput = null;
+    if (this.boundSiteHotkeyHandler) {
+      document.removeEventListener('keydown', this.boundSiteHotkeyHandler, true);
+    }
+    
+    // Save the site-specific hotkeys
+    this.saveSiteSpecificUnfocusHotkeys();
+  }
+
+  async updateElementHotkey(tabUrl, index, hotkey) {
+    const result = await chrome.storage.local.get([tabUrl]);
+    const elements = result[tabUrl] || [];
+    
+    if (elements[index]) {
+      elements[index].hotkey = hotkey;
+      await chrome.storage.local.set({ [tabUrl]: elements });
+      
+      // Re-render elements to show the new hotkey
+      this.renderElements(elements, tabUrl);
+      
+      // Notify content script that hotkeys have changed
+      this.notifyContentScript();
+    }
+  }
+
+  async saveSiteSpecificUnfocusHotkeys() {
+    const siteHotkeys = {};
+    const items = this.siteUnfocusHotkeyList.querySelectorAll('.site-hotkey-item');
+    
+    items.forEach(item => {
+      const domain = item.querySelector('.site-hotkey-domain').textContent;
+      const hotkey = item.querySelector('.site-hotkey-value').value;
+      
+      if (domain && hotkey && !hotkey.includes('Press any key') && !hotkey.includes('Click to record')) {
+        siteHotkeys[domain] = hotkey;
+      }
+    });
+    
+    await chrome.storage.local.set({ siteUnfocusHotkeys: siteHotkeys });
+    console.log('Site-specific unfocus hotkeys saved:', siteHotkeys);
+    
+    // Notify content script
+    this.notifyContentScript();
+  }
+
+  renderSiteSpecificUnfocusHotkeys(siteHotkeys) {
+    this.siteUnfocusHotkeyList.innerHTML = '';
+    
+    Object.entries(siteHotkeys).forEach(([domain, hotkey]) => {
+      const item = document.createElement('div');
+      item.className = 'site-hotkey-item';
+      
+      item.innerHTML = `
+        <div class="site-hotkey-domain">${domain}</div>
+        <input type="text" class="site-hotkey-value" value="${hotkey}" readonly>
+        <button class="site-hotkey-remove" title="Remove">×</button>
+      `;
+      
+      // Add event listeners
+      const hotkeyInput = item.querySelector('.site-hotkey-value');
+      const removeBtn = item.querySelector('.site-hotkey-remove');
+      
+      hotkeyInput.addEventListener('click', () => {
+        this.startRecordingSiteHotkey(hotkeyInput, domain);
+      });
+      
+      removeBtn.addEventListener('click', () => {
+        item.remove();
+        this.saveSiteSpecificUnfocusHotkeys();
+      });
+      
+      this.siteUnfocusHotkeyList.appendChild(item);
+    });
   }
 }
 

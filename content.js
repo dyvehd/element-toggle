@@ -4,8 +4,8 @@ class ElementPicker {
     this.hoveredElement = null;
     this.overlay = null;
     this.clickHotkeys = []; // Store hotkeys for this page
-    this.lastEscapeTime = 0; // Track timing for double-Esc detection
-    this.escapeTimeout = 500; // Maximum time between Esc presses (ms)
+    this.unfocusHotkey = null; // Global unfocus hotkey
+    this.siteUnfocusHotkeys = {}; // Site-specific unfocus hotkeys
     
     this.handleMouseMove = this.handleMouseMove.bind(this);
     this.handleClick = this.handleClick.bind(this);
@@ -54,6 +54,7 @@ class ElementPicker {
   async loadHotkeysAndRestoreState() {
     await this.restoreElementStates(); // Restore visibility first
     
+    // Load click hotkeys
     const result = await chrome.storage.local.get([window.location.hostname]);
     const elements = result[window.location.hostname] || [];
     
@@ -63,92 +64,98 @@ class ElementPicker {
         hotkey: el.hotkey,
         selector: el.selector,
         smartSelector: el.smartSelector,
-        patternSelector: el.patternSelector,
+        patternSelector: el.patternSelector, // Include pattern selector
         name: el.name // Add name for debugging
       }));
 
+    // Load unfocus settings
+    const settings = await chrome.storage.local.get([
+      'enableUnfocusHotkey',
+      'globalUnfocusHotkey',
+      'enableSiteSpecificUnfocus',
+      'siteUnfocusHotkeys'
+    ]);
+    
+    this.unfocusEnabled = settings.enableUnfocusHotkey || false;
+    this.globalUnfocusHotkey = settings.globalUnfocusHotkey || 'Alt+Shift+U';
+    this.siteSpecificEnabled = settings.enableSiteSpecificUnfocus || false;
+    this.siteUnfocusHotkeys = settings.siteUnfocusHotkeys || {};
+    
+    // Get current domain for site-specific hotkey
+    this.currentDomain = window.location.hostname;
+
     console.log('Loaded hotkeys for', window.location.hostname, ':', this.clickHotkeys);
+    console.log('Unfocus settings:', { 
+      enabled: this.unfocusEnabled, 
+      global: this.globalUnfocusHotkey,
+      siteSpecific: this.siteSpecificEnabled,
+      siteDomains: Object.keys(this.siteUnfocusHotkeys),
+      currentSite: this.siteUnfocusHotkeys[this.currentDomain]
+    });
 
     // Remove any existing listener before adding a new one
     document.removeEventListener('keydown', this.handleGlobalHotkey, true);
     
-    // Only add listener if we have hotkeys
-    if (this.clickHotkeys.length > 0) {
+    // Add listener if we have hotkeys or unfocus is enabled
+    if (this.clickHotkeys.length > 0 || this.unfocusEnabled) {
       document.addEventListener('keydown', this.handleGlobalHotkey, true);
-      console.log('Global hotkey listener attached with', this.clickHotkeys.length, 'hotkeys');
+      console.log('Global hotkey listener attached');
     } else {
-      console.log('No hotkeys to register for this page');
+      console.log('No hotkeys or unfocus disabled - no listener attached');
     }
   }
 
   handleGlobalHotkey(e) {
     console.log('Key pressed:', e.key, 'Modifiers:', { ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey });
     
-    // Double-Esc mechanism - works even inside input fields
-    if (e.key === 'Escape') {
-      const currentTime = Date.now();
-      const timeSinceLastEscape = currentTime - this.lastEscapeTime;
-      
-      console.log('Escape pressed, time since last:', timeSinceLastEscape + 'ms');
-      
-      if (timeSinceLastEscape < this.escapeTimeout) {
-        // Double Esc detected!
-        console.log('Double-Escape detected - unfocusing any active element');
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Find the currently focused element and blur it
-        const activeElement = document.activeElement;
-        if (activeElement && (
-          ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName) || 
-          activeElement.isContentEditable
-        )) {
-          activeElement.blur();
-          this.showHotkeyNotification('Input unfocused - hotkeys ready', 'success');
-        } else {
-          this.showHotkeyNotification('Double-Esc detected', 'info');
-        }
-        
-        // Reset the timer to prevent triple-Esc from triggering again
-        this.lastEscapeTime = 0;
-        return;
-      } else {
-        // First Esc or too much time has passed
-        this.lastEscapeTime = currentTime;
-        
-        // If we're in an input field, don't process other hotkeys
-        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) {
-          console.log('Single Esc in input field - ignoring (press Esc again quickly to unfocus)');
-          return;
-        }
-      }
-    }
-    
-    // Standard check: Don't trigger other hotkeys if user is typing in an input field
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) {
-      console.log('Ignoring hotkey - user is typing in an input field (double-tap Esc to unfocus)');
-      return;
-    }
-
+    // Build hotkey string
     let hotkeyString = '';
     if (e.ctrlKey) hotkeyString += 'Ctrl+';
     if (e.altKey) hotkeyString += 'Alt+';
     if (e.shiftKey) hotkeyString += 'Shift+';
+    if (e.metaKey) hotkeyString += 'Meta+';
 
     if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
-      hotkeyString += e.key.toUpperCase();
+      let keyName = e.key;
+      if (keyName === ' ') keyName = 'Space';
+      else if (keyName.length === 1) keyName = keyName.toUpperCase();
+      hotkeyString += keyName;
     } else {
-      console.log('Only modifier was pressed, ignoring');
       return; // Only modifier was pressed
     }
 
     console.log('Hotkey string formed:', hotkeyString);
-    console.log('Available hotkeys:', this.clickHotkeys.map(h => h.hotkey));
 
+    // Check for unfocus hotkey first (works even in input fields)
+    if (this.unfocusEnabled && this.checkUnfocusHotkey(hotkeyString)) {
+      console.log('Unfocus hotkey matched!');
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const activeElement = document.activeElement;
+      if (activeElement && (
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName) || 
+        activeElement.isContentEditable
+      )) {
+        activeElement.blur();
+        this.showHotkeyNotification('Input unfocused - hotkeys ready', 'success');
+      } else {
+        this.showHotkeyNotification('No input to unfocus', 'info');
+      }
+      return;
+    }
+    
+    // Don't trigger click hotkeys if user is typing in an input field
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) {
+      console.log('Ignoring click hotkey - user is typing in an input field');
+      return;
+    }
+
+    // Check for click hotkeys
     const matchedHotkey = this.clickHotkeys.find(h => h.hotkey === hotkeyString);
 
     if (matchedHotkey) {
-      console.log('Hotkey matched!', matchedHotkey);
+      console.log('Click hotkey matched!', matchedHotkey);
       e.preventDefault();
       e.stopPropagation();
       
@@ -171,6 +178,25 @@ class ElementPicker {
     } else {
       console.log('No hotkey match found for:', hotkeyString);
     }
+  }
+
+  checkUnfocusHotkey(hotkeyString) {
+    // Check site-specific hotkey first (if enabled)
+    if (this.siteSpecificEnabled && this.siteUnfocusHotkeys[this.currentDomain]) {
+      const siteHotkey = this.siteUnfocusHotkeys[this.currentDomain];
+      if (hotkeyString === siteHotkey) {
+        console.log('Site-specific unfocus hotkey matched:', siteHotkey);
+        return true;
+      }
+    }
+    
+    // Fall back to global hotkey
+    if (hotkeyString === this.globalUnfocusHotkey) {
+      console.log('Global unfocus hotkey matched:', this.globalUnfocusHotkey);
+      return true;
+    }
+    
+    return false;
   }
 
   performElementAction(element) {
@@ -363,8 +389,8 @@ class ElementPicker {
     
     // Smart method - now prioritizes pattern selectors with enhanced matching
     
-    // 1. Try enhanced pattern selector first (if available and contains special attributes)
-    if (patternSelector && patternSelector !== selector) {
+    // 1. Try enhanced pattern selector first (if available)
+    if (patternSelector) {
       if (patternSelector.includes('[text=') || patternSelector.includes('[icon=')) {
         const element = this.findElementWithPattern(patternSelector);
         if (element) {
@@ -752,13 +778,13 @@ class ElementPicker {
     
     document.body.appendChild(feedback);
     
-    // Auto-remove after 3 seconds with slide-out animation
+    // Auto-remove after 1 seconds with slide-out animation
     setTimeout(() => {
       if (feedback.parentNode) {
         feedback.classList.add('slide-out');
         setTimeout(() => feedback.remove(), 300);
       }
-    }, 3000);
+    }, 1000);
   }
   
   toggleElementVisibility(selector, smartSelector, method, visible, patternSelector = null) {
@@ -864,13 +890,13 @@ class ElementPicker {
     
     document.body.appendChild(notification);
     
-    // Auto-remove after 4 seconds (longer for instructional messages)
+    // Auto-remove after 1 seconds
     setTimeout(() => {
       if (notification.parentNode) {
         notification.classList.add('slide-out');
         setTimeout(() => notification.remove(), 300);
       }
-    }, 4000);
+    }, 1000);
   }
 
   showHotkeyNotification(message, type = 'info') {
@@ -915,12 +941,12 @@ class ElementPicker {
     
     document.body.appendChild(notification);
     
-    // Auto-remove after 3 seconds
+    // Auto-remove after 1 seconds
     setTimeout(() => {
       if (notification.parentNode) {
         notification.remove();
       }
-    }, 3000);
+    }, 1000);
   }
 
   testPatternSelector(pattern, enhanced = false) {
@@ -1015,23 +1041,60 @@ class ElementPicker {
   }
 
   convertPatternToCSS(pattern) {
-    // Convert wildcard patterns to CSS attribute selectors
+    // Convert wildcard patterns to CSS attribute selectors with enhanced matching
     let cssSelector = pattern;
     
-    // Handle ID patterns: #prefix-* becomes [id^="prefix-"]
+    // Enhanced ID patterns handling
+    // Handle complex patterns like #_r_*_ or #prefix-*-suffix
+    cssSelector = cssSelector.replace(/#([^#\s\[\]]*)\*([^#\s\[\]]*)/g, (match, prefix, suffix) => {
+      if (prefix && suffix) {
+        // Pattern like #_r_*_ becomes [id^="_r_"][id$="_"]
+        return `[id^="${prefix}"][id$="${suffix}"]`;
+      } else if (prefix) {
+        // Pattern like #prefix-* becomes [id^="prefix-"]
+        return `[id^="${prefix}"]`;
+      } else if (suffix) {
+        // Pattern like #*-suffix becomes [id$="-suffix"]
+        return `[id$="${suffix}"]`;
+      }
+      return match;
+    });
+    
+    // Handle remaining simple ID patterns: #prefix* becomes [id^="prefix"]
     cssSelector = cssSelector.replace(/#([^#\s\[\]]+)\*/g, '[id^="$1"]');
     cssSelector = cssSelector.replace(/#\*([^#\s\[\]]+)/g, '[id$="$1"]');
-    cssSelector = cssSelector.replace(/#([^#\s\[\]]*)\*([^#\s\[\]]+)/g, '[id*="$1"][id*="$2"]');
     
-    // Handle class patterns: .prefix-* becomes [class*="prefix-"]
+    // Enhanced class patterns handling
+    // Handle complex patterns like .class-*-end
+    cssSelector = cssSelector.replace(/\.([^.\s\[\]]*)\*([^.\s\[\]]*)/g, (match, prefix, suffix) => {
+      if (prefix && suffix) {
+        // Pattern like .btn-*-large becomes [class*="btn-"][class*="-large"]
+        return `[class*="${prefix}"][class*="${suffix}"]`;
+      } else if (prefix) {
+        // Pattern like .btn-* becomes [class*="btn-"]
+        return `[class*="${prefix}"]`;
+      } else if (suffix) {
+        // Pattern like .*-large becomes [class*="-large"]
+        return `[class*="${suffix}"]`;
+      }
+      return match;
+    });
+    
+    // Handle remaining simple class patterns
     cssSelector = cssSelector.replace(/\.([^.\s\[\]]+)\*/g, '[class*="$1"]');
     cssSelector = cssSelector.replace(/\.\*([^.\s\[\]]+)/g, '[class*="$1"]');
-    cssSelector = cssSelector.replace(/\.([^.\s\[\]]*)\*([^.\s\[\]]+)/g, '[class*="$1"][class*="$2"]');
     
-    // Handle attribute patterns: [attr="prefix-*"] becomes [attr^="prefix-"]
-    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*"\]/g, '[$1^="$2"]');
-    cssSelector = cssSelector.replace(/\[([^=]+)="\*([^"]*)"\]/g, '[$1$="$2"]');
-    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*([^"]*)"\]/g, '[$1*="$2"][$1*="$3"]');
+    // Enhanced attribute patterns: [attr="prefix-*-suffix"] becomes [attr*="prefix-"][attr*="-suffix"]
+    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*([^"]*)"\]/g, (match, attr, prefix, suffix) => {
+      if (prefix && suffix) {
+        return `[${attr}*="${prefix}"][${attr}*="${suffix}"]`;
+      } else if (prefix) {
+        return `[${attr}^="${prefix}"]`;
+      } else if (suffix) {
+        return `[${attr}$="${suffix}"]`;
+      }
+      return match;
+    });
     
     // Handle nth-child patterns: :nth-child(*) becomes :nth-child(n)
     cssSelector = cssSelector.replace(/:nth-child\(\*\)/g, ':nth-child(n)');

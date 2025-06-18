@@ -152,26 +152,7 @@
     }
     
     .clear-selector-btn {
-      position: absolute;
-      right: 8px;
-      background: none;
-      border: none;
-      color: #666;
-      cursor: pointer;
-      padding: 4px;
-      border-radius: 3px;
-      font-size: 14px;
-      line-height: 1;
-      display: none;
-    }
-    
-    .clear-selector-btn:hover {
-      background: #f1f3f4;
-      color: #333;
-    }
-    
-    .manual-selector-input:not(:placeholder-shown) + .clear-selector-btn {
-      display: block;
+      display: none !important;
     }
     
     .manual-selector-tip {
@@ -971,6 +952,208 @@
     .edit-selector-btn:hover {
       background: #f3e5f5;
     }
+
+    /* Settings enhancements */
+    .setting-section {
+      margin-bottom: 20px;
+      border-bottom: 1px solid #e5e5e5;
+      padding-bottom: 16px;
+    }
+
+    .setting-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .setting-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 12px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .setting-indent {
+      margin-left: 20px;
+      margin-top: 8px;
+    }
+
+    .setting-sublabel {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .hotkey-input-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .hotkey-input {
+      flex: 1;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      background: #f8f9fa;
+      color: #333;
+      min-width: 120px;
+    }
+
+    .hotkey-input:focus {
+      outline: none;
+      border-color: #4285f4;
+      box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+      background: white;
+    }
+
+    .hotkey-input.recording {
+      border-color: #ea4335;
+      background: #fef7f0;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 2px rgba(234, 67, 53, 0.2); }
+      50% { box-shadow: 0 0 0 4px rgba(234, 67, 53, 0.1); }
+    }
+
+    .hotkey-record-btn {
+      padding: 6px 12px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      background: #f8f9fa;
+      color: #333;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .hotkey-record-btn:hover {
+      background: #e8f0fe;
+      border-color: #4285f4;
+    }
+
+    .hotkey-record-btn.recording {
+      background: #ea4335;
+      color: white;
+      border-color: #ea4335;
+    }
+
+    .site-hotkey-list {
+      margin-bottom: 12px;
+    }
+
+    .site-hotkey-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+
+    .site-hotkey-domain {
+      flex: 1;
+      font-size: 11px;
+      font-weight: 500;
+      color: #333;
+      min-width: 100px;
+    }
+
+    .site-hotkey-value {
+      flex: 1;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      color: #666;
+      padding: 4px 8px;
+      background: white;
+      border: 1px solid #dadce0;
+      border-radius: 3px;
+      text-align: center;
+      min-width: 80px;
+    }
+
+    .site-hotkey-remove {
+      color: #ea4335;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    .site-hotkey-remove:hover {
+      background: #fef7f0;
+    }
+
+    .secondary-btn {
+      background: #f8f9fa;
+      color: #333;
+      border: 1px solid #dadce0;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .secondary-btn:hover {
+      background: #e8f0fe;
+      border-color: #4285f4;
+    }
+
+    .secondary-btn:disabled {
+      background: #f1f3f4;
+      color: #9aa0a6;
+      cursor: not-allowed;
+      border-color: #e8eaed;
+    }
+
+    .manual-input-section {
+      margin: 10px 0;
+    }
+
+    .manual-input-section input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .manual-input-section button {
+      width: 100%;
+      padding: 8px;
+      border: none;
+      border-radius: 4px;
+      background: #ccc;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+
+    .manual-input-section button:not(:disabled):hover {
+      opacity: 0.9;
+    }
+
+    .manual-input-help {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+      line-height: 1.3;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -983,12 +1166,15 @@
     
     <div class="manual-selector-section">
       <div class="manual-selector-header">
-        <span class="manual-selector-label">Or paste selector from DevTools:</span>
-        <button id="addSelectorBtn" class="add-selector-btn">Add Element</button>
+        <span class="manual-selector-label">Paste selector or pattern:</span>
+        <button id="addSelectorHeaderBtn" class="add-selector-btn" style="display:none;">Add Element</button>
       </div>
-      <div class="manual-selector-input-container">
-        <input type="text" id="manualSelectorInput" class="manual-selector-input" placeholder="e.g., .header nav ul li:nth-child(2)" />
-        <button id="clearSelectorBtn" class="clear-selector-btn" title="Clear input">×</button>
+      <div class="manual-input-section">
+        <input type="text" id="manualSelectorInput" class="manual-selector-input" placeholder="Or paste selector from DevTools (patterns supported)" maxlength="500">
+        <button id="addSelectorBtn" disabled>Add Selector</button>
+        <div class="manual-input-help">
+          💡 Enter CSS selectors or patterns (with *). Button colors: <span style="color: #4285f4">Blue</span> = Valid CSS, <span style="color: #34a853">Green</span> = Valid Pattern, <span style="color: #ea4335">Red</span> = Invalid
+        </div>
       </div>
       <div class="manual-selector-tip">
         💡 Right-click element in DevTools → Copy → Copy selector, then paste here
@@ -1030,15 +1216,11 @@
       <div class="setting-group">
         <div class="setting-group-title">Element Restoration</div>
         <div class="setting-item">
-          <div class="setting-label">
-            Auto-restore element states on page load
-            <div class="setting-description">Automatically restore hidden elements when you visit a page</div>
-            <div class="setting-warning">⚠️ This might not work consistently across all websites</div>
-          </div>
-          <label class="setting-toggle">
-            <input type="checkbox" id="autoRestoreToggle">
-            <span class="setting-slider"></span>
+          <label class="setting-label">
+            <input type="checkbox" id="autoRestore"> Auto-restore element states on page load
           </label>
+          <div class="setting-description">Automatically restore hidden elements when you visit a page</div>
+          <div class="setting-warning">⚠️ This might not work consistently across all websites</div>
         </div>
       </div>
       
@@ -1096,6 +1278,40 @@
           </div>
         </div>
       </div>
+
+      <!-- Input Focus Settings -->
+      <div class="setting-section">
+        <div class="setting-section-title">Input Focus Settings</div>
+        
+        <div class="setting-item">
+          <label class="setting-label">
+            <input type="checkbox" id="enableUnfocusHotkey"> Enable unfocus hotkey
+          </label>
+          <div class="setting-description">Allows you to unfocus input fields with a custom hotkey</div>
+        </div>
+
+        <div class="setting-item setting-indent" id="unfocusHotkeySettings" style="display: none;">
+          <label class="setting-sublabel">Global unfocus hotkey:</label>
+          <div class="hotkey-input-group">
+            <input type="text" id="globalUnfocusHotkey" class="hotkey-input" placeholder="Alt+Shift+U" readonly>
+            <button id="recordGlobalUnfocusHotkey" class="hotkey-record-btn">Record</button>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">
+            <input type="checkbox" id="enableSiteSpecificUnfocus"> Enable site-specific unfocus hotkeys
+          </label>
+          <div class="setting-description">Customize unfocus hotkeys for different websites</div>
+        </div>
+
+        <div class="setting-item setting-indent" id="siteSpecificUnfocusSettings" style="display: none;">
+          <div class="site-hotkey-list" id="siteUnfocusHotkeyList">
+            <!-- Site-specific hotkeys will be populated here -->
+          </div>
+          <button id="addSiteUnfocusHotkey" class="secondary-btn">+ Add Override for Current Site</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1122,13 +1338,14 @@
         <div class="pattern-examples">
           <div class="pattern-examples-title">💡 Pattern Examples:</div>
           <ul class="pattern-examples-list">
-            <li><strong>Basic:</strong> <code>#mat-mdc-chip-13</code> → <code>#mat-mdc-chip-*</code></li>
-            <li><strong>Text:</strong> <code>#mat-mdc-chip-*[text="YouTube"]</code> (matches by text content)</li>
-            <li><strong>Attribute:</strong> <code>#mat-mdc-chip-*[jslog*="230547"]</code> (matches by attribute)</li>
-            <li><strong>Icon:</strong> <code>#mat-mdc-chip-*[icon="video_youtube"]</code> (matches by icon)</li>
-            <li><strong>Position:</strong> <code>#mat-mdc-chip-*:nth-of-type(2)</code> (2nd of its type)</li>
-            <li><strong>Class:</strong> <code>.button-*-end</code> → <code>.button-*-end</code></li>
+            <li><strong>Simple:</strong> <code>#mat-mdc-chip-*</code> (ends with anything)</li>
+            <li><strong>Complex:</strong> <code>#_r_*_</code> (middle wildcard like _r_123f_)</li>
+            <li><strong>Multiple:</strong> <code>.btn-*-large</code> (matches .btn-primary-large)</li>
+            <li><strong>Text:</strong> <code>#mat-mdc-chip-*[text="YouTube"]</code> (with text content)</li>
+            <li><strong>Attribute:</strong> <code>[jslog*="230547"]</code> (attribute contains value)</li>
+            <li><strong>Position:</strong> <code>div:nth-child(*)</code> (any position)</li>
           </ul>
+          <div class="pattern-examples-title" style="margin-top: 8px;">✨ You can also enter patterns directly in "Or paste selector from DevTools" above!</div>
         </div>
       </div>
       <div class="modal-footer">
