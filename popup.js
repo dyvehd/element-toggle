@@ -19,6 +19,20 @@ class ElementTogglePopup {
     this.clearSelectorBtn = document.getElementById('clearSelectorBtn');
     this.openShortcutsBtn = document.getElementById('openShortcutsBtn');
     
+    // Selector editor modal elements
+    this.selectorEditorModal = document.getElementById('selectorEditorModal');
+    this.closeSelectorEditor = document.getElementById('closeSelectorEditor');
+    this.cancelSelectorEdit = document.getElementById('cancelSelectorEdit');
+    this.testSelector = document.getElementById('testSelector');
+    this.saveSelectorEdit = document.getElementById('saveSelectorEdit');
+    this.originalSelector = document.getElementById('originalSelector');
+    this.patternSelector = document.getElementById('patternSelector');
+    this.selectorHint = document.getElementById('selectorHint');
+    
+    // Current editing context
+    this.currentEditingTabUrl = null;
+    this.currentEditingIndex = null;
+    
     this.init();
   }
   
@@ -93,6 +107,35 @@ class ElementTogglePopup {
       chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
     });
 
+    // Selector editor modal events
+    this.closeSelectorEditor.addEventListener('click', () => {
+      this.closeSelectorEditorModal();
+    });
+
+    this.cancelSelectorEdit.addEventListener('click', () => {
+      this.closeSelectorEditorModal();
+    });
+
+    this.testSelector.addEventListener('click', () => {
+      this.testSelectorPattern();
+    });
+
+    this.saveSelectorEdit.addEventListener('click', () => {
+      this.saveSelectorPattern();
+    });
+
+    // Close modal when clicking outside
+    this.selectorEditorModal.addEventListener('click', (e) => {
+      if (e.target === this.selectorEditorModal) {
+        this.closeSelectorEditorModal();
+      }
+    });
+
+    // Real-time validation of pattern selector
+    this.patternSelector.addEventListener('input', () => {
+      this.validateSelectorPattern();
+    });
+
     // Add event listeners for hotkey buttons
     const hotkeyButtons = this.elementsList.querySelectorAll('.hotkey-btn');
     hotkeyButtons.forEach(button => {
@@ -100,6 +143,37 @@ class ElementTogglePopup {
         const tabUrl = e.target.dataset.tabUrl;
         const index = parseInt(e.target.dataset.index);
         this.recordHotkey(tabUrl, index, e.target);
+      });
+    });
+
+    // Add event listeners for delete buttons
+    const deleteButtons = this.elementsList.querySelectorAll('.delete-btn');
+    deleteButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const tabUrl = e.target.dataset.tabUrl;
+        const index = parseInt(e.target.dataset.index);
+        this.deleteElement(tabUrl, index);
+      });
+    });
+
+    // Add event listeners for edit selector buttons
+    const editSelectorButtons = this.elementsList.querySelectorAll('.edit-selector-btn');
+    editSelectorButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const tabUrl = e.target.dataset.tabUrl;
+        const index = parseInt(e.target.dataset.index);
+        this.openSelectorEditor(tabUrl, index);
+      });
+    });
+
+    // Add event listeners for action dropdowns
+    const actionSelects = this.elementsList.querySelectorAll('.action-select');
+    actionSelects.forEach(select => {
+      select.addEventListener('change', (e) => {
+        const tabUrl = e.target.dataset.tabUrl;
+        const index = parseInt(e.target.dataset.index);
+        const newAction = e.target.value;
+        this.updateElementAction(tabUrl, index, newAction);
       });
     });
   }
@@ -297,6 +371,7 @@ class ElementTogglePopup {
                 </label>
               ` : ''}
               <button class="action-btn edit-btn" data-tab-url="${tabUrl}" data-index="${index}" title="Edit Name">✏️</button>
+              <button class="action-btn edit-selector-btn" data-tab-url="${tabUrl}" data-index="${index}" title="Edit Selector">🎯</button>
               <button class="action-btn delete-btn" data-tab-url="${tabUrl}" data-index="${index}" title="Remove">×</button>
             </div>
           </div>
@@ -358,6 +433,16 @@ class ElementTogglePopup {
         const tabUrl = e.target.dataset.tabUrl;
         const index = parseInt(e.target.dataset.index);
         this.deleteElement(tabUrl, index);
+      });
+    });
+
+    // Add event listeners for edit selector buttons
+    const editSelectorButtons = this.elementsList.querySelectorAll('.edit-selector-btn');
+    editSelectorButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const tabUrl = e.target.dataset.tabUrl;
+        const index = parseInt(e.target.dataset.index);
+        this.openSelectorEditor(tabUrl, index);
       });
     });
 
@@ -876,6 +961,228 @@ class ElementTogglePopup {
       }
     } catch (error) {
       console.error("Could not notify content script. Are you on a valid page?", error);
+    }
+  }
+
+  async openSelectorEditor(tabUrl, index) {
+    const result = await chrome.storage.local.get([tabUrl]);
+    const elements = result[tabUrl] || [];
+    const element = elements[index];
+    
+    if (!element) return;
+    
+    // Store current editing context
+    this.currentEditingTabUrl = tabUrl;
+    this.currentEditingIndex = index;
+    
+    // Populate modal fields
+    this.originalSelector.value = element.selector;
+    this.patternSelector.value = element.patternSelector || element.selector;
+    
+    // Show modal
+    this.selectorEditorModal.classList.add('active');
+    this.patternSelector.focus();
+    
+    // Initial validation
+    this.validateSelectorPattern();
+  }
+
+  closeSelectorEditorModal() {
+    this.selectorEditorModal.classList.remove('active');
+    this.currentEditingTabUrl = null;
+    this.currentEditingIndex = null;
+  }
+
+  validateSelectorPattern() {
+    const pattern = this.patternSelector.value.trim();
+    
+    if (!pattern) {
+      this.updateSelectorHint('Please enter a selector pattern', 'error');
+      this.saveSelectorEdit.disabled = true;
+      return false;
+    }
+    
+    // Convert pattern to CSS selector for validation
+    const cssSelector = this.convertPatternToCSS(pattern);
+    
+    try {
+      // Test if it's a valid CSS selector
+      document.querySelector(cssSelector);
+      this.updateSelectorHint('Pattern looks valid ✓', 'success');
+      this.saveSelectorEdit.disabled = false;
+      return true;
+    } catch (e) {
+      this.updateSelectorHint('Invalid CSS selector syntax', 'error');
+      this.saveSelectorEdit.disabled = true;
+      return false;
+    }
+  }
+
+  updateSelectorHint(message, type = '') {
+    this.selectorHint.textContent = message;
+    this.selectorHint.className = `selector-editor-hint ${type}`;
+  }
+
+  convertPatternToCSS(pattern) {
+    // Convert wildcard patterns to CSS attribute selectors with enhanced matching
+    let cssSelector = pattern;
+    
+    // Handle special pattern attributes first
+    // Text content matching: [text="YouTube"] becomes a data attribute we'll handle in JS
+    if (cssSelector.includes('[text=')) {
+      // We'll handle text matching in the custom findElementWithPattern method
+      // For now, just remove it from CSS validation
+      cssSelector = cssSelector.replace(/\[text="[^"]*"\]/g, '');
+    }
+    
+    // Icon matching: [icon="video_youtube"] becomes mat-icon[data-mat-icon-type="font"]:contains(video_youtube)
+    if (cssSelector.includes('[icon=')) {
+      cssSelector = cssSelector.replace(/\[icon="([^"]*)"\]/g, '');
+    }
+    
+    // Handle ID patterns: #prefix-* becomes [id^="prefix-"]
+    cssSelector = cssSelector.replace(/#([^#\s\[\]]+)\*/g, '[id^="$1"]');
+    cssSelector = cssSelector.replace(/#\*([^#\s\[\]]+)/g, '[id$="$1"]');
+    cssSelector = cssSelector.replace(/#([^#\s\[\]]*)\*([^#\s\[\]]+)/g, '[id*="$1"][id*="$2"]');
+    
+    // Handle class patterns: .prefix-* becomes [class*="prefix-"]
+    cssSelector = cssSelector.replace(/\.([^.\s\[\]]+)\*/g, '[class*="$1"]');
+    cssSelector = cssSelector.replace(/\.\*([^.\s\[\]]+)/g, '[class*="$1"]');
+    cssSelector = cssSelector.replace(/\.([^.\s\[\]]*)\*([^.\s\[\]]+)/g, '[class*="$1"][class*="$2"]');
+    
+    // Handle attribute patterns: [attr="prefix-*"] becomes [attr^="prefix-"]
+    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*"\]/g, '[$1^="$2"]');
+    cssSelector = cssSelector.replace(/\[([^=]+)="\*([^"]*)"\]/g, '[$1$="$2"]');
+    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*([^"]*)"\]/g, '[$1*="$2"][$1*="$3"]');
+    
+    // Handle contains attribute patterns: [attr*="value"] (already valid CSS)
+    // These don't need conversion
+    
+    // Handle nth-child patterns: :nth-child(*) becomes :nth-child(n)
+    cssSelector = cssSelector.replace(/:nth-child\(\*\)/g, ':nth-child(n)');
+    cssSelector = cssSelector.replace(/:nth-of-type\(\*\)/g, ':nth-of-type(n)');
+    
+    return cssSelector.trim();
+  }
+
+  findElementWithPattern(pattern) {
+    // Enhanced pattern matching that handles text content and icon matching
+    try {
+      // Parse special pattern attributes
+      const textMatch = pattern.match(/\[text="([^"]*)"\]/);
+      const iconMatch = pattern.match(/\[icon="([^"]*)"\]/);
+      
+      // Get the base CSS selector (without special attributes)
+      let baseSelector = pattern
+        .replace(/\[text="[^"]*"\]/g, '')
+        .replace(/\[icon="[^"]*"\]/g, '')
+        .trim();
+      
+      // Convert base pattern to CSS
+      const cssSelector = this.convertPatternToCSS(baseSelector);
+      
+      // Find all elements matching the base pattern
+      const candidates = document.querySelectorAll(cssSelector);
+      
+      // Filter by additional criteria
+      for (const element of candidates) {
+        let matches = true;
+        
+        // Check text content
+        if (textMatch) {
+          const targetText = textMatch[1].toLowerCase();
+          const elementText = element.textContent.trim().toLowerCase();
+          if (!elementText.includes(targetText)) {
+            matches = false;
+          }
+        }
+        
+        // Check icon content
+        if (iconMatch) {
+          const targetIcon = iconMatch[1];
+          const iconElement = element.querySelector('mat-icon');
+          if (!iconElement || iconElement.textContent.trim() !== targetIcon) {
+            matches = false;
+          }
+        }
+        
+        if (matches) {
+          return element;
+        }
+      }
+      
+      // If no enhanced match found, fall back to basic CSS selector
+      return document.querySelector(cssSelector);
+      
+    } catch (error) {
+      console.error('Error in findElementWithPattern:', error);
+      return null;
+    }
+  }
+
+  async testSelectorPattern() {
+    if (!this.validateSelectorPattern()) {
+      return;
+    }
+    
+    const pattern = this.patternSelector.value.trim();
+    
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      // Send test message to content script with enhanced pattern
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'testPatternSelector',
+        pattern: pattern,
+        enhanced: true
+      });
+      
+      if (response && response.found) {
+        if (response.enhanced && response.specificMatches > 0) {
+          this.updateSelectorHint(`✓ Found ${response.specificMatches} specific match(es) (${response.count} total matches)`, 'success');
+        } else {
+          this.updateSelectorHint(`✓ Found ${response.count} matching element(s) on page`, 'success');
+        }
+      } else {
+        this.updateSelectorHint('⚠ No matching elements found on current page', 'error');
+      }
+    } catch (error) {
+      console.error('Error testing selector:', error);
+      this.updateSelectorHint('Failed to test selector on page', 'error');
+    }
+  }
+
+  async saveSelectorPattern() {
+    if (!this.validateSelectorPattern()) {
+      return;
+    }
+    
+    const pattern = this.patternSelector.value.trim();
+    const tabUrl = this.currentEditingTabUrl;
+    const index = this.currentEditingIndex;
+    
+    if (!tabUrl || index === null) return;
+    
+    try {
+      const result = await chrome.storage.local.get([tabUrl]);
+      const elements = result[tabUrl] || [];
+      
+      if (elements[index]) {
+        elements[index].patternSelector = pattern;
+        await chrome.storage.local.set({ [tabUrl]: elements });
+        
+        this.showNotification('Selector pattern saved successfully!', 'success');
+        this.closeSelectorEditorModal();
+        
+        // Refresh the elements list
+        this.renderElements(elements, tabUrl);
+        
+        // Notify content script of changes
+        this.notifyContentScript();
+      }
+    } catch (error) {
+      console.error('Error saving selector pattern:', error);
+      this.showNotification('Failed to save selector pattern', 'error');
     }
   }
 }

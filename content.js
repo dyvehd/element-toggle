@@ -29,7 +29,8 @@ class ElementPicker {
           request.selector, 
           request.smartSelector, 
           request.method || 'smart',
-          request.visible
+          request.visible,
+          request.patternSelector
         );
         sendResponse({ success: true });
       } else if (request.action === 'testSelector') {
@@ -42,6 +43,10 @@ class ElementPicker {
         // Reload hotkeys and state from storage
         this.loadHotkeysAndRestoreState();
         sendResponse({ success: true });
+      } else if (request.action === 'testPatternSelector') {
+        // Test a pattern selector
+        const result = this.testPatternSelector(request.pattern, request.enhanced);
+        sendResponse(result);
       }
     });
   }
@@ -58,6 +63,7 @@ class ElementPicker {
         hotkey: el.hotkey,
         selector: el.selector,
         smartSelector: el.smartSelector,
+        patternSelector: el.patternSelector,
         name: el.name // Add name for debugging
       }));
 
@@ -149,7 +155,8 @@ class ElementPicker {
       const element = this.findElementWithFallback(
         matchedHotkey.selector,
         matchedHotkey.smartSelector,
-        'smart' // Always use smart find for hotkeys
+        'smart', // Always use smart find for hotkeys
+        matchedHotkey.patternSelector // Pass pattern selector
       );
 
       if (element) {
@@ -339,7 +346,7 @@ class ElementPicker {
   }
   
   // Enhanced element finding that tries multiple methods
-  findElementWithFallback(selector, smartSelector, method = 'smart') {
+  findElementWithFallback(selector, smartSelector, method = 'smart', patternSelector = null) {
     const trySelector = (sel) => {
       if (!sel) return null;
       try {
@@ -354,32 +361,52 @@ class ElementPicker {
       return trySelector(selector);
     } 
     
-    // Smart method
-    // 1. Try exact selector first
+    // Smart method - now prioritizes pattern selectors with enhanced matching
+    
+    // 1. Try enhanced pattern selector first (if available and contains special attributes)
+    if (patternSelector && patternSelector !== selector) {
+      if (patternSelector.includes('[text=') || patternSelector.includes('[icon=')) {
+        const element = this.findElementWithPattern(patternSelector);
+        if (element) {
+          console.log('Found element with enhanced pattern selector:', patternSelector);
+          return element;
+        }
+      } else {
+        // Use basic pattern conversion for simple patterns
+        const cssPatternSelector = this.convertPatternToCSS(patternSelector);
+        const element = trySelector(cssPatternSelector);
+        if (element) {
+          console.log('Found element with pattern selector:', patternSelector, '→', cssPatternSelector);
+          return element;
+        }
+      }
+    }
+    
+    // 2. Try exact selector
     let element = trySelector(selector);
     if (element) return element;
     
-    // 2. Try provided smart selector
+    // 3. Try provided smart selector
     if (smartSelector && smartSelector !== selector) {
       element = trySelector(smartSelector);
       if (element) return element;
     }
     
-    // 3. Generate and try a new smart selector
+    // 4. Generate and try a new smart selector
     const generatedSmartSelector = this.generateSmartSelector(selector);
     if (generatedSmartSelector !== selector) {
       element = trySelector(generatedSmartSelector);
       if (element) return element;
     }
     
-    // 4. Try minimal selector as last resort
+    // 5. Try minimal selector as last resort
     const minimalSelector = this.generateMinimalSelector(selector);
     if (minimalSelector && minimalSelector !== selector) {
       element = trySelector(minimalSelector);
       if (element) return element;
     }
 
-    // 5. If it's a complex selector, try finding by a more stable parent
+    // 6. If it's a complex selector, try finding by a more stable parent
     if (selector.includes('>')) {
       const parts = selector.split('>');
       if (parts.length > 1) {
@@ -734,8 +761,8 @@ class ElementPicker {
     }, 3000);
   }
   
-  toggleElementVisibility(selector, smartSelector, method, visible) {
-    const element = this.findElementWithFallback(selector, smartSelector, method);
+  toggleElementVisibility(selector, smartSelector, method, visible, patternSelector = null) {
+    const element = this.findElementWithFallback(selector, smartSelector, method, patternSelector);
     
     if (element) {
       if (visible) {
@@ -746,7 +773,7 @@ class ElementPicker {
         element.style.display = 'none';
       }
     } else {
-      console.warn('Could not find element to toggle:', { selector, smartSelector, method });
+      console.warn('Could not find element to toggle:', { selector, smartSelector, patternSelector, method });
     }
   }
   
@@ -771,7 +798,8 @@ class ElementPicker {
         const element = this.findElementWithFallback(
           elementData.selector, 
           elementData.smartSelector, 
-          method
+          method,
+          elementData.patternSelector // Pass pattern selector
         );
         
         if (element) {
@@ -893,6 +921,123 @@ class ElementPicker {
         notification.remove();
       }
     }, 3000);
+  }
+
+  testPatternSelector(pattern, enhanced = false) {
+    try {
+      if (enhanced) {
+        // Use enhanced pattern matching
+        const element = this.findElementWithPattern(pattern);
+        const cssSelector = this.convertPatternToCSS(pattern);
+        const allMatches = document.querySelectorAll(cssSelector);
+        
+        return {
+          found: !!element,
+          count: allMatches.length,
+          specificMatches: element ? 1 : 0,
+          enhanced: true,
+          cssSelector: cssSelector
+        };
+      } else {
+        // Use basic pattern matching
+        const cssSelector = this.convertPatternToCSS(pattern);
+        const elements = document.querySelectorAll(cssSelector);
+        
+        return {
+          found: elements.length > 0,
+          count: elements.length,
+          cssSelector: cssSelector
+        };
+      }
+    } catch (error) {
+      console.error('Error testing pattern selector:', error);
+      return {
+        found: false,
+        count: 0,
+        error: error.message
+      };
+    }
+  }
+
+  findElementWithPattern(pattern) {
+    // Enhanced pattern matching that handles text content and icon matching
+    try {
+      // Parse special pattern attributes
+      const textMatch = pattern.match(/\[text="([^"]*)"\]/);
+      const iconMatch = pattern.match(/\[icon="([^"]*)"\]/);
+      
+      // Get the base CSS selector (without special attributes)
+      let baseSelector = pattern
+        .replace(/\[text="[^"]*"\]/g, '')
+        .replace(/\[icon="[^"]*"\]/g, '')
+        .trim();
+      
+      // Convert base pattern to CSS
+      const cssSelector = this.convertPatternToCSS(baseSelector);
+      
+      // Find all elements matching the base pattern
+      const candidates = document.querySelectorAll(cssSelector);
+      
+      // Filter by additional criteria
+      for (const element of candidates) {
+        let matches = true;
+        
+        // Check text content
+        if (textMatch) {
+          const targetText = textMatch[1].toLowerCase();
+          const elementText = element.textContent.trim().toLowerCase();
+          if (!elementText.includes(targetText)) {
+            matches = false;
+          }
+        }
+        
+        // Check icon content
+        if (iconMatch) {
+          const targetIcon = iconMatch[1];
+          const iconElement = element.querySelector('mat-icon');
+          if (!iconElement || iconElement.textContent.trim() !== targetIcon) {
+            matches = false;
+          }
+        }
+        
+        if (matches) {
+          return element;
+        }
+      }
+      
+      // If no enhanced match found, fall back to basic CSS selector
+      return document.querySelector(cssSelector);
+      
+    } catch (error) {
+      console.error('Error in findElementWithPattern:', error);
+      return null;
+    }
+  }
+
+  convertPatternToCSS(pattern) {
+    // Convert wildcard patterns to CSS attribute selectors
+    let cssSelector = pattern;
+    
+    // Handle ID patterns: #prefix-* becomes [id^="prefix-"]
+    cssSelector = cssSelector.replace(/#([^#\s\[\]]+)\*/g, '[id^="$1"]');
+    cssSelector = cssSelector.replace(/#\*([^#\s\[\]]+)/g, '[id$="$1"]');
+    cssSelector = cssSelector.replace(/#([^#\s\[\]]*)\*([^#\s\[\]]+)/g, '[id*="$1"][id*="$2"]');
+    
+    // Handle class patterns: .prefix-* becomes [class*="prefix-"]
+    cssSelector = cssSelector.replace(/\.([^.\s\[\]]+)\*/g, '[class*="$1"]');
+    cssSelector = cssSelector.replace(/\.\*([^.\s\[\]]+)/g, '[class*="$1"]');
+    cssSelector = cssSelector.replace(/\.([^.\s\[\]]*)\*([^.\s\[\]]+)/g, '[class*="$1"][class*="$2"]');
+    
+    // Handle attribute patterns: [attr="prefix-*"] becomes [attr^="prefix-"]
+    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*"\]/g, '[$1^="$2"]');
+    cssSelector = cssSelector.replace(/\[([^=]+)="\*([^"]*)"\]/g, '[$1$="$2"]');
+    cssSelector = cssSelector.replace(/\[([^=]+)="([^"]*)\*([^"]*)"\]/g, '[$1*="$2"][$1*="$3"]');
+    
+    // Handle nth-child patterns: :nth-child(*) becomes :nth-child(n)
+    cssSelector = cssSelector.replace(/:nth-child\(\*\)/g, ':nth-child(n)');
+    cssSelector = cssSelector.replace(/:nth-of-type\(\*\)/g, ':nth-of-type(n)');
+    
+    return cssSelector;
   }
 }
 

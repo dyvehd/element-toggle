@@ -765,6 +765,212 @@
       background: #f8fff4;
       border-left: 3px solid #34a853;
     }
+
+    /* Selector Editor Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      width: 95%;
+      max-width: 480px;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e5e5;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .modal-title {
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 16px;
+      color: #666;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+    }
+
+    .modal-close:hover {
+      background: #f1f3f4;
+    }
+
+    .modal-body {
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .selector-editor-field {
+      margin-bottom: 12px;
+    }
+
+    .selector-editor-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .selector-editor-input {
+      width: 100%;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      background: #f8f9fa;
+      color: #333;
+      resize: vertical;
+      min-height: 32px;
+      max-height: 80px;
+      box-sizing: border-box;
+    }
+
+    .selector-editor-input:focus {
+      outline: none;
+      border-color: #4285f4;
+      box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+      background: white;
+    }
+
+    .selector-editor-pattern {
+      background: white;
+      border-color: #34a853;
+    }
+
+    .selector-editor-pattern:focus {
+      border-color: #34a853;
+      box-shadow: 0 0 0 2px rgba(52, 168, 83, 0.2);
+    }
+
+    .selector-editor-hint {
+      font-size: 10px;
+      color: #666;
+      margin-top: 3px;
+      line-height: 1.3;
+    }
+
+    .selector-editor-hint.success {
+      color: #34a853;
+    }
+
+    .selector-editor-hint.error {
+      color: #ea4335;
+    }
+
+    .pattern-examples {
+      background: #f0f7ff;
+      border: 1px solid #cce7ff;
+      border-radius: 4px;
+      padding: 10px;
+      margin: 10px 0;
+    }
+
+    .pattern-examples-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: #1967d2;
+      margin-bottom: 4px;
+    }
+
+    .pattern-examples-list {
+      font-size: 9px;
+      color: #5f6368;
+      line-height: 1.3;
+      margin: 0;
+      padding-left: 12px;
+    }
+
+    .pattern-examples-list li {
+      margin-bottom: 1px;
+    }
+
+    .modal-footer {
+      padding: 12px 16px;
+      border-top: 1px solid #e5e5e5;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .modal-btn {
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .modal-btn.primary {
+      background: #4285f4;
+      color: white;
+    }
+
+    .modal-btn.primary:hover {
+      background: #3367d6;
+    }
+
+    .modal-btn.primary:disabled {
+      background: #9aa0a6;
+      cursor: not-allowed;
+    }
+
+    .modal-btn.secondary {
+      background: #f8f9fa;
+      color: #333;
+      border: 1px solid #dadce0;
+    }
+
+    .modal-btn.secondary:hover {
+      background: #e8f0fe;
+      border-color: #4285f4;
+    }
+
+    .edit-selector-btn {
+      color: #673ab7;
+      margin-left: 4px;
+    }
+
+    .edit-selector-btn:hover {
+      background: #f3e5f5;
+    }
   </style>
 </head>
 <body>
@@ -889,6 +1095,46 @@
             💡 If you get "trapped" in a text input, quickly press <strong>Esc twice</strong> to unfocus and use other hotkeys again
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selector Editor Modal -->
+  <div id="selectorEditorModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Selector</h3>
+        <button class="modal-close" id="closeSelectorEditor">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="selector-editor-field">
+          <label class="selector-editor-label">Original Selector (read-only)</label>
+          <textarea id="originalSelector" class="selector-editor-input" readonly></textarea>
+          <div class="selector-editor-hint">This is the selector that was originally captured</div>
+        </div>
+        
+        <div class="selector-editor-field">
+          <label class="selector-editor-label">Pattern Selector (editable)</label>
+          <textarea id="patternSelector" class="selector-editor-input selector-editor-pattern" placeholder="Edit the selector here, use * for dynamic parts"></textarea>
+          <div id="selectorHint" class="selector-editor-hint">Use * to replace dynamic parts like IDs or class names</div>
+        </div>
+
+        <div class="pattern-examples">
+          <div class="pattern-examples-title">💡 Pattern Examples:</div>
+          <ul class="pattern-examples-list">
+            <li><strong>Basic:</strong> <code>#mat-mdc-chip-13</code> → <code>#mat-mdc-chip-*</code></li>
+            <li><strong>Text:</strong> <code>#mat-mdc-chip-*[text="YouTube"]</code> (matches by text content)</li>
+            <li><strong>Attribute:</strong> <code>#mat-mdc-chip-*[jslog*="230547"]</code> (matches by attribute)</li>
+            <li><strong>Icon:</strong> <code>#mat-mdc-chip-*[icon="video_youtube"]</code> (matches by icon)</li>
+            <li><strong>Position:</strong> <code>#mat-mdc-chip-*:nth-of-type(2)</code> (2nd of its type)</li>
+            <li><strong>Class:</strong> <code>.button-*-end</code> → <code>.button-*-end</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn secondary" id="cancelSelectorEdit">Cancel</button>
+        <button class="modal-btn secondary" id="testSelector">Test Pattern</button>
+        <button class="modal-btn primary" id="saveSelectorEdit">Save Pattern</button>
       </div>
     </div>
   </div>
